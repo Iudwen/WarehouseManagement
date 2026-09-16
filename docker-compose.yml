@@ -198,6 +198,30 @@ services:
 
     networks:
       - warehouse_network
+      # ==========================================================
+  # SYNC SERVICE
+  # ==========================================================
+  sync_service:
+    build:
+      context: ./data_center/etl
+      dockerfile: Dockerfile
+
+    container_name: warehouse_sync_service
+
+    restart: unless-stopped
+
+    depends_on:
+      postgres_hn:
+        condition: service_healthy
+      postgres_dn:
+        condition: service_healthy
+      postgres_hcm:
+        condition: service_healthy
+      postgres_central:
+        condition: service_healthy
+
+    networks:
+      - warehouse_network
 
 
 # ============================================================
