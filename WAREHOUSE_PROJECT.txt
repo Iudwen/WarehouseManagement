@@ -1,0 +1,159 @@
+WAREHOUSE_PROJECT/
+│
+├── README.md
+├── docker-compose.yml
+├── .env
+├── requirements.txt
+│
+├── nodes/
+│   │
+│   ├── node_hn/
+│   │   ├── 01_create_database.sql
+│   │   ├── 02_create_global_tables.sql
+│   │   ├── 03_create_hn_fragments.sql
+│   │   ├── 04_create_constraints.sql
+│   │   ├── 05_insert_hn_data.sql
+│   │   ├── 06_create_views.sql
+│   │   └── 07_create_indexes.sql
+│   │
+│   ├── node_dn/
+│   │   ├── 01_create_database.sql
+│   │   ├── 02_create_global_tables.sql
+│   │   ├── 03_create_dn_fragments.sql
+│   │   ├── 04_create_constraints.sql
+│   │   ├── 05_insert_dn_data.sql
+│   │   ├── 06_create_views.sql
+│   │   └── 07_create_indexes.sql
+│   │
+│   └── node_hcm/
+│       ├── 01_create_database.sql
+│       ├── 02_create_global_tables.sql
+│       ├── 03_create_hcm_fragments.sql
+│       ├── 04_create_constraints.sql
+│       ├── 05_insert_hcm_data.sql
+│       ├── 06_create_views.sql
+│       └── 07_create_indexes.sql
+│
+├── mongodb/
+│   ├── 01_init_database.js
+│   ├── 02_create_collections.js
+│   ├── 03_create_indexes.js
+│   └── 04_insert_sample_events.js
+│
+├── data_center/
+│   │
+│   ├── central_database/
+│   │   ├── 01_create_database.sql
+│   │   ├── 02_create_tables.sql
+│   │   ├── 03_create_constraints.sql
+│   │   ├── 04_create_views.sql
+│   │   └── 05_create_indexes.sql
+│   │
+│   ├── etl/
+│   │   ├── extract/
+│   │   │   ├── extract_postgresql.py
+│   │   │   └── extract_mongodb.py
+│   │   │
+│   │   ├── transform/
+│   │   │   ├── clean_inventory.py
+│   │   │   └── transform_events.py
+│   │   │
+│   │   └── load/
+│   │       ├── load_bronze.py
+│   │       ├── load_silver.py
+│   │       └── load_gold.py
+│   │
+│   ├── data_lake/
+│   │   ├── bronze/
+│   │   ├── silver/
+│   │   └── gold/
+│   │
+│   └── data_warehouse/
+│       ├── dimensions/
+│       │   ├── dim_thoi_gian.sql
+│       │   ├── dim_san_pham.sql
+│       │   └── dim_kho.sql
+│       │
+│       ├── facts/
+│       │   ├── fact_ton_kho.sql
+│       │   ├── fact_ban_hang.sql
+│       │   ├── fact_nhap_hang.sql
+│       │   └── fact_dieu_chuyen.sql
+│       │
+│       └── procedures/
+│
+├── data_mining/
+│   │
+│   ├── data_preprocessing/
+│   ├── eda/
+│   ├── feature_engineering/
+│   ├── models/
+│   ├── evaluation/
+│   ├── prediction/
+│   └── transfer_recommendation/
+│
+├── backend/
+│   ├── main.py
+│   │
+│   ├── config/
+│   │   ├── settings.py
+│   │   └── database.py
+│   │
+│   ├── models/
+│   │
+│   ├── schemas/
+│   │
+│   ├── routers/
+│   │   ├── auth.py
+│   │   ├── products.py
+│   │   ├── warehouses.py
+│   │   ├── inventory.py
+│   │   ├── purchase.py
+│   │   ├── sales.py
+│   │   ├── transfer.py
+│   │   └── reports.py
+│   │
+│   ├── services/
+│   │   ├── inventory_service.py
+│   │   ├── purchase_service.py
+│   │   ├── sales_service.py
+│   │   ├── transfer_service.py
+│   │   ├── distributed_service.py
+│   │   ├── sync_service.py
+│   │   └── event_service.py
+│   │
+│   └── repositories/
+│       ├── postgres_hn.py
+│       ├── postgres_dn.py
+│       ├── postgres_hcm.py
+│       └── mongodb.py
+│
+├── frontend/
+│   ├── login/
+│   ├── dashboard/
+│   ├── products/
+│   ├── warehouses/
+│   ├── inventory/
+│   ├── purchase/
+│   ├── sales/
+│   ├── transfer/
+│   └── forecast/
+│
+├── dashboard/
+│   └── warehouse_dashboard.pbix
+│
+├── scripts/
+│   ├── seed_data.py
+│   ├── test_postgresql.py
+│   ├── test_mongodb.py
+│   └── test_distributed.py
+│
+└── docs/
+    ├── 01_gioi_thieu.docx
+    ├── 02_he_thong_phan_tan.docx
+    ├── 03_thiet_ke_database.docx
+    ├── 04_data_lake.docx
+    ├── 05_data_warehouse.docx
+    ├── 06_data_mining.docx
+    ├── 07_power_bi.docx
+    └── 08_huong_dan_su_dung.docx

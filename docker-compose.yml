@@ -1,0 +1,233 @@
+services:
+
+  # ==========================================================
+  # NODE HN
+  # ==========================================================
+  postgres_hn:
+    image: postgres:18
+    container_name: warehouse_postgres_hn
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB_HN}
+
+    ports:
+      - "${POSTGRES_PORT_HN}:5432"
+
+    volumes:
+      - postgres_hn_data:/var/lib/postgresql
+
+      - ./nodes/node_hn/01_create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql:ro
+      - ./nodes/node_hn/02_create_global_tables.sql:/docker-entrypoint-initdb.d/02_create_global_tables.sql:ro
+      - ./nodes/node_hn/03_create_hn_fragments.sql:/docker-entrypoint-initdb.d/03_create_hn_fragments.sql:ro
+      - ./nodes/node_hn/04_create_constraints.sql:/docker-entrypoint-initdb.d/04_create_constraints.sql:ro
+      - ./nodes/node_hn/05_insert_hn_data.sql:/docker-entrypoint-initdb.d/05_insert_hn_data.sql:ro
+      - ./nodes/node_hn/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
+      - ./nodes/node_hn/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_HN}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # NODE DN
+  # ==========================================================
+  postgres_dn:
+    image: postgres:18
+    container_name: warehouse_postgres_dn
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB_DN}
+
+    ports:
+      - "${POSTGRES_PORT_DN}:5432"
+
+    volumes:
+      - postgres_dn_data:/var/lib/postgresql
+
+      - ./nodes/node_dn/01_create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql:ro
+      - ./nodes/node_dn/02_create_global_tables.sql:/docker-entrypoint-initdb.d/02_create_global_tables.sql:ro
+      - ./nodes/node_dn/03_create_dn_fragments.sql:/docker-entrypoint-initdb.d/03_create_dn_fragments.sql:ro
+      - ./nodes/node_dn/04_create_constraints.sql:/docker-entrypoint-initdb.d/04_create_constraints.sql:ro
+      - ./nodes/node_dn/05_insert_dn_data.sql:/docker-entrypoint-initdb.d/05_insert_dn_data.sql:ro
+      - ./nodes/node_dn/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
+      - ./nodes/node_dn/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_DN}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # NODE HCM
+  # ==========================================================
+  postgres_hcm:
+    image: postgres:18
+    container_name: warehouse_postgres_hcm
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB_HCM}
+
+    ports:
+      - "${POSTGRES_PORT_HCM}:5432"
+
+    volumes:
+      - postgres_hcm_data:/var/lib/postgresql
+
+      - ./nodes/node_hcm/01_create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql:ro
+      - ./nodes/node_hcm/02_create_global_tables.sql:/docker-entrypoint-initdb.d/02_create_global_tables.sql:ro
+      - ./nodes/node_hcm/03_create_hcm_fragments.sql:/docker-entrypoint-initdb.d/03_create_hcm_fragments.sql:ro
+      - ./nodes/node_hcm/04_create_constraints.sql:/docker-entrypoint-initdb.d/04_create_constraints.sql:ro
+      - ./nodes/node_hcm/05_insert_hcm_data.sql:/docker-entrypoint-initdb.d/05_insert_hcm_data.sql:ro
+      - ./nodes/node_hcm/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
+      - ./nodes/node_hcm/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_HCM}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # CENTRAL DATABASE
+  # ==========================================================
+  postgres_central:
+    image: postgres:18
+    container_name: warehouse_postgres_central
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_DB: ${POSTGRES_DB_CENTRAL}
+
+    ports:
+      - "${POSTGRES_PORT_CENTRAL}:5432"
+
+    volumes:
+      - postgres_central_data:/var/lib/postgresql
+
+      - ./data_center/central_database/01_create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql:ro
+      - ./data_center/central_database/02_create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql:ro
+      - ./data_center/central_database/03_create_constraints.sql:/docker-entrypoint-initdb.d/03_create_constraints.sql:ro
+      - ./data_center/central_database/04_create_views.sql:/docker-entrypoint-initdb.d/04_create_views.sql:ro
+      - ./data_center/central_database/05_create_indexes.sql:/docker-entrypoint-initdb.d/05_create_indexes.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB_CENTRAL}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # MONGODB
+  # ==========================================================
+  mongodb:
+    image: mongo:8
+    container_name: warehouse_mongodb
+    restart: unless-stopped
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE}
+
+    ports:
+      - "${MONGO_PORT}:27017"
+
+    volumes:
+      - mongodb_data:/data/db
+
+      - ./mongodb/01_init_database.js:/docker-entrypoint-initdb.d/01_init_database.js:ro
+      - ./mongodb/02_create_collections.js:/docker-entrypoint-initdb.d/02_create_collections.js:ro
+      - ./mongodb/03_create_indexes.js:/docker-entrypoint-initdb.d/03_create_indexes.js:ro
+      - ./mongodb/04_insert_sample_events.js:/docker-entrypoint-initdb.d/04_insert_sample_events.js:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --eval \"db.adminCommand('ping').ok\""
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_network
+
+
+# ============================================================
+# VOLUMES
+# ============================================================
+
+volumes:
+
+  postgres_hn_data:
+    name: warehouse_postgres_hn_data
+
+  postgres_dn_data:
+    name: warehouse_postgres_dn_data
+
+  postgres_hcm_data:
+    name: warehouse_postgres_hcm_data
+
+  postgres_central_data:
+    name: warehouse_postgres_central_data
+
+  mongodb_data:
+    name: warehouse_mongodb_data
+
+
+# ============================================================
+# NETWORK
+# ============================================================
+
+networks:
+
+  warehouse_network:
+    name: warehouse_network
+    driver: bridge
