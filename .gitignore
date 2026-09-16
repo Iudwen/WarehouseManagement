@@ -1,0 +1,23 @@
+# Dependency folders
+node_modules/
+
+# Build outputs
+dist/
+build/
+
+# Environment & local settings
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE & Editor files
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.swp
