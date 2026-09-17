@@ -31,9 +31,12 @@ export const processImport = async (pool: Pool, payload: ImportPayload) => {
         [ma_kho, item.ma_sp, item.so_luong]
       );
 
+      // UPSERT Lịch sử Tồn kho (Cộng dồn số lượng nhập trong ngày)
       await client.query(
         `INSERT INTO lich_su_ton_kho (ma_kho, ma_sp, ngay, nhap) 
-         VALUES ($1, $2, CURRENT_DATE, $3)`,
+         VALUES ($1, $2, CURRENT_DATE, $3)
+         ON CONFLICT (ma_kho, ma_sp, ngay) 
+         DO UPDATE SET nhap = lich_su_ton_kho.nhap + EXCLUDED.nhap`,
         [ma_kho, item.ma_sp, item.so_luong]
       );
     }
@@ -58,7 +61,7 @@ export const processExport = async (pool: Pool, payload: ExportPayload) => {
     await client.query('BEGIN');
     const { ma_phieu_xuat, ma_kho, ma_kh, items } = payload;
 
-    // 1. Kiểm tra số lượng tồn kho thực tế
+    // 1. Kiểm tra số lượng tồn kho thực tế (Lock dòng với FOR UPDATE)
     for (const item of items) {
       const res = await client.query(
         `SELECT so_luong FROM ton_kho WHERE ma_kho = $1 AND ma_sp = $2 FOR UPDATE`,
@@ -91,9 +94,12 @@ export const processExport = async (pool: Pool, payload: ExportPayload) => {
         [item.so_luong, ma_kho, item.ma_sp]
       );
 
+      // UPSERT Lịch sử Tồn kho (Cộng dồn số lượng xuất trong ngày)
       await client.query(
         `INSERT INTO lich_su_ton_kho (ma_kho, ma_sp, ngay, xuat) 
-         VALUES ($1, $2, CURRENT_DATE, $3)`,
+         VALUES ($1, $2, CURRENT_DATE, $3)
+         ON CONFLICT (ma_kho, ma_sp, ngay) 
+         DO UPDATE SET xuat = lich_su_ton_kho.xuat + EXCLUDED.xuat`,
         [ma_kho, item.ma_sp, item.so_luong]
       );
     }

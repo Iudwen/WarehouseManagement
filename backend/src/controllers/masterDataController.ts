@@ -1,9 +1,10 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { CustomRequest } from '../types';
 import { getMasterDataByNode } from '../services/masterDataService';
 
-export const getMasterData = async (req: Request, res: Response) => {
+export const getMasterData = async (req: CustomRequest, res: Response) => {
   try {
-    const ma_kho = (req.query.ma_kho as string) || 'HN01';
+    const ma_kho = (req.query.ma_kho as string) || req.maKhoContext || 'HN01';
     const data = await getMasterDataByNode(ma_kho);
     res.json({ success: true, data });
   } catch (err: any) {

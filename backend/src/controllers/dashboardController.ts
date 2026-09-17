@@ -1,16 +1,29 @@
-import { Request, Response } from 'express';
+import { Response } from 'express';
+import { CustomRequest } from '../types';
 import { getAggregatedStock } from '../services/dashboardService';
 import mongoose from 'mongoose';
 
-export const getDashboardSummary = async (req: Request, res: Response) => {
+export const getDashboardSummary = async (req: CustomRequest, res: Response) => {
   try {
-    const stocks = await getAggregatedStock();
+    const ma_kho = (req.query.ma_kho as string) || req.maKhoContext;
+    const stocks = await getAggregatedStock(ma_kho);
     
-    // Query Log sự kiện thực tế từ MongoDB
+    // Query Log sự kiện thực tế từ MongoDB có filter theo kho
     const eventsCollection = mongoose.connection.collection('inventory_events');
-    const recentLogs = await eventsCollection.find().sort({ timestamp: -1 }).limit(10).toArray();
+    const query: any = {};
+    if (ma_kho) {
+      query.ma_kho = ma_kho.trim().toUpperCase();
+    }
+
+    const recentLogs = await eventsCollection
+      .find(query)
+      .sort({ created_at: -1 })
+      .limit(10)
+      .toArray();
 
     res.json({
+      success: true,
+      warehouse: ma_kho || 'ALL',
       stocks,
       recentLogs
     });

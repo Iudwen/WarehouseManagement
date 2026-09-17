@@ -1,15 +1,20 @@
 import { getDbPool } from '../config/postgresql';
 
-export const getAggregatedStock = async () => {
-  const nodes = [
+export const getAggregatedStock = async (ma_kho?: string) => {
+  const allNodes = [
     { code: 'HN01', name: 'Kho Hà Nội' },
     { code: 'DN01', name: 'Kho Đà Nẵng' },
     { code: 'HCM01', name: 'Kho TP.HCM' }
   ];
 
+  // Nếu Frontend truyền ma_kho cụ thể thì chỉ quét Node đó, ngược lại quét tất cả
+  const targetNodes = ma_kho 
+    ? allNodes.filter(n => n.code.toUpperCase().includes(ma_kho.toUpperCase()))
+    : allNodes;
+
   const stockData: any[] = [];
 
-  for (const node of nodes) {
+  for (const node of targetNodes) {
     try {
       const pool = getDbPool(node.code);
       const res = await pool.query(`

@@ -1,10 +1,14 @@
 import { getDbPool } from '../config/postgresql';
 
-export const getLowStockAlerts = async () => {
-  const nodes = ['HN01', 'DN01', 'HCM01'];
+export const getLowStockAlerts = async (ma_kho?: string) => {
+  const allNodes = ['HN01', 'DN01', 'HCM01'];
+  const targetNodes = ma_kho 
+    ? allNodes.filter(node => node.toUpperCase().includes(ma_kho.toUpperCase()))
+    : allNodes;
+
   const alerts: any[] = [];
 
-  for (const node of nodes) {
+  for (const node of targetNodes) {
     try {
       const pool = getDbPool(node);
       const res = await pool.query(`

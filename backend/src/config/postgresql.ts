@@ -31,9 +31,19 @@ export const pools: Record<string, Pool> = {
   }),
 };
 
+/**
+ * Lấy Database Connection Pool dựa trên Mã Kho truyền vào.
+ * Chuẩn hóa chuỗi (chữ hoa/chữ thường) và nhận diện chuỗi linh hoạt.
+ */
 export const getDbPool = (maKho?: string): Pool => {
-  if (maKho?.startsWith('HN')) return pools.HN;
-  if (maKho?.startsWith('DN')) return pools.DN;
-  if (maKho?.startsWith('HCM')) return pools.HCM;
+  if (!maKho) return pools.CENTRAL;
+
+  const kho = maKho.trim().toUpperCase();
+
+  if (kho.startsWith('HN') || kho.includes('HN')) return pools.HN;
+  if (kho.startsWith('DN') || kho.includes('DN')) return pools.DN;
+  if (kho.startsWith('HCM') || kho.includes('HCM')) return pools.HCM;
+  if (kho.startsWith('CENTRAL')) return pools.CENTRAL;
+
   return pools.CENTRAL;
 };

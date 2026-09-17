@@ -27,7 +27,7 @@ export default function Transfer() {
         kho_nhap: formData.kho_nhap,
         items: [{ ma_sp: formData.ma_sp, so_luong: Number(formData.so_luong) }],
       };
-      await api.post('/transfer/transfer', payload);
+      await api.post('/transfer', payload)
       setStatus({ type: 'success', text: '✅ Điều chuyển kho thành công!' });
     } catch (err: any) {
       setStatus({ type: 'error', text: `❌ Lỗi: ${err.response?.data?.message || err.message}` });

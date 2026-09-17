@@ -4,8 +4,10 @@ import { dbSelector } from '../middlewares/dbSelector';
 
 const router = Router();
 
-// Tạm thời chưa bọc verifyToken để bạn test Postman dễ dàng trước
-router.post('/import', dbSelector, handleImport);
-router.post('/export', dbSelector, handleExport);
+// Bọc chung ở đầu router thay vì viết lặp lại ở từng route
+router.use(dbSelector);
+
+router.post('/import', handleImport);
+router.post('/export', handleExport);
 
 export default router;
