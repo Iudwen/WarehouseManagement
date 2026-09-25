@@ -69,7 +69,7 @@ def connect_database(config):
 
 
 # ============================================================
-# LẤY THÔNG TIN KHO
+# 1. LẤY THÔNG TIN KHO
 # ============================================================
 
 def get_warehouses(node_conn):
@@ -81,15 +81,18 @@ def get_warehouses(node_conn):
             dia_chi,
             thanh_pho
         FROM kho
+        WHERE loai_kho = 'BRANCH'
     """
 
     with node_conn.cursor() as cursor:
+
         cursor.execute(sql)
+
         return cursor.fetchall()
 
 
 # ============================================================
-# LẤY THÔNG TIN SẢN PHẨM
+# 2. LẤY THÔNG TIN SẢN PHẨM
 # ============================================================
 
 def get_products(node_conn):
@@ -108,12 +111,14 @@ def get_products(node_conn):
     """
 
     with node_conn.cursor() as cursor:
+
         cursor.execute(sql)
+
         return cursor.fetchall()
 
 
 # ============================================================
-# LẤY DỮ LIỆU TỒN KHO
+# 3. LẤY DỮ LIỆU TỒN KHO
 # ============================================================
 
 def get_inventory(node_conn):
@@ -128,12 +133,87 @@ def get_inventory(node_conn):
     """
 
     with node_conn.cursor() as cursor:
+
         cursor.execute(sql)
+
         return cursor.fetchall()
 
 
 # ============================================================
-# ĐỒNG BỘ BẢNG KHO
+# 4. LẤY DỮ LIỆU NHẬP KHO
+# ============================================================
+
+def get_purchase_receipts(node_conn):
+
+    sql = """
+        SELECT
+            pn.ma_phieu_nhap,
+            pn.ma_kho,
+            pn.ngay_nhap,
+            ct.ma_sp,
+            ct.so_luong,
+            ct.don_gia
+        FROM phieu_nhap pn
+
+        INNER JOIN ct_phieu_nhap ct
+            ON pn.ma_phieu_nhap = ct.ma_phieu_nhap
+
+        WHERE pn.trang_thai IN (
+            'CHO_NHAP',
+            'DA_NHAP',
+            'HOAN_THANH'
+        )
+
+        ORDER BY
+            pn.ngay_nhap,
+            pn.ma_phieu_nhap,
+            ct.ma_sp
+    """
+
+    with node_conn.cursor() as cursor:
+
+        cursor.execute(sql)
+
+        return cursor.fetchall()
+
+
+# ============================================================
+# 5. LẤY DỮ LIỆU ĐIỀU CHUYỂN TỪ CENTRAL
+# ============================================================
+
+def get_pending_transfers(central_conn):
+
+    sql = """
+        SELECT
+            id,
+            ma_phieu_dc,
+            kho_xuat,
+            kho_nhap,
+            ma_sp,
+            so_luong,
+            ngay_dieu_chuyen,
+            trang_thai,
+            source_node
+        FROM dieu_chuyen_central
+        WHERE trang_thai IN (
+            'CHO_XU_LY',
+            'CREATED',
+            'PENDING'
+        )
+        ORDER BY
+            ngay_dieu_chuyen,
+            id
+    """
+
+    with central_conn.cursor() as cursor:
+
+        cursor.execute(sql)
+
+        return cursor.fetchall()
+
+
+# ============================================================
+# 6. ĐỒNG BỘ BẢNG KHO
 # ============================================================
 
 def sync_warehouses(
@@ -154,6 +234,7 @@ def sync_warehouses(
             trang_thai,
             dong_bo_luc
         )
+
         VALUES (
             %s,
             %s,
@@ -167,6 +248,7 @@ def sync_warehouses(
         )
 
         ON CONFLICT (ma_kho)
+
         DO UPDATE SET
             ten_kho = EXCLUDED.ten_kho,
             dia_chi = EXCLUDED.dia_chi,
@@ -199,7 +281,7 @@ def sync_warehouses(
 
 
 # ============================================================
-# ĐỒNG BỘ SẢN PHẨM
+# 7. ĐỒNG BỘ SẢN PHẨM
 # ============================================================
 
 def sync_products(
@@ -218,6 +300,7 @@ def sync_products(
             ton_toi_thieu,
             ton_an_toan
         )
+
         VALUES (
             %s,
             %s,
@@ -230,6 +313,7 @@ def sync_products(
         )
 
         ON CONFLICT (ma_sp)
+
         DO UPDATE SET
             ten_sp = EXCLUDED.ten_sp,
             ma_nhom = EXCLUDED.ma_nhom,
@@ -253,12 +337,13 @@ def sync_products(
 
 
 # ============================================================
-# ĐỒNG BỘ TỒN KHO
+# 8. ĐỒNG BỘ TỒN KHO
 # ============================================================
 
 def sync_inventory(
     central_conn,
-    inventory
+    inventory,
+    node_config
 ):
 
     sql = """
@@ -266,9 +351,12 @@ def sync_inventory(
             ma_kho,
             ma_sp,
             so_luong,
-            cap_nhat_luc
+            cap_nhat_luc,
+            source_node
         )
+
         VALUES (
+            %s,
             %s,
             %s,
             %s,
@@ -276,9 +364,11 @@ def sync_inventory(
         )
 
         ON CONFLICT (ma_kho, ma_sp)
+
         DO UPDATE SET
             so_luong = EXCLUDED.so_luong,
-            cap_nhat_luc = EXCLUDED.cap_nhat_luc
+            cap_nhat_luc = EXCLUDED.cap_nhat_luc,
+            source_node = EXCLUDED.source_node
     """
 
     with central_conn.cursor() as cursor:
@@ -287,14 +377,97 @@ def sync_inventory(
 
             cursor.execute(
                 sql,
-                item
+                (
+                    item[0],
+                    item[1],
+                    item[2],
+                    item[3],
+                    node_config["node_name"]
+                )
             )
 
     central_conn.commit()
 
 
 # ============================================================
-# CẬP NHẬT TRẠNG THÁI NODE
+# 9. ĐỒNG BỘ NHẬP HÀNG
+# ============================================================
+
+def sync_purchase_receipts(
+    central_conn,
+    purchases,
+    node_config
+):
+
+    sql = """
+        INSERT INTO nhap_hang_central (
+            ma_phieu_nhap,
+            ma_kho,
+            ma_sp,
+            ngay_nhap,
+            so_luong,
+            don_gia,
+            thanh_tien,
+            source_node
+        )
+
+        VALUES (
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s,
+            %s
+        )
+
+        ON CONFLICT (
+            ma_phieu_nhap,
+            ma_kho,
+            ma_sp,
+            source_node
+        )
+
+        DO UPDATE SET
+            ngay_nhap = EXCLUDED.ngay_nhap,
+            so_luong = EXCLUDED.so_luong,
+            don_gia = EXCLUDED.don_gia,
+            thanh_tien = EXCLUDED.thanh_tien
+    """
+
+    with central_conn.cursor() as cursor:
+
+        for purchase in purchases:
+
+            ma_phieu_nhap = purchase[0]
+            ma_kho = purchase[1]
+            ngay_nhap = purchase[2]
+            ma_sp = purchase[3]
+            so_luong = purchase[4]
+            don_gia = purchase[5]
+
+            thanh_tien = so_luong * don_gia
+
+            cursor.execute(
+                sql,
+                (
+                    ma_phieu_nhap,
+                    ma_kho,
+                    ma_sp,
+                    ngay_nhap,
+                    so_luong,
+                    don_gia,
+                    thanh_tien,
+                    node_config["node_name"]
+                )
+            )
+
+    central_conn.commit()
+
+
+# ============================================================
+# 10. CẬP NHẬT TRẠNG THÁI NODE
 # ============================================================
 
 def update_node_status(
@@ -306,7 +479,6 @@ def update_node_status(
     last_sync=False
 ):
 
-    # Xác định mã kho tương ứng với node
     ma_kho_map = {
         "NODE_HN": "HN01",
         "NODE_DN": "DN01",
@@ -328,6 +500,7 @@ def update_node_status(
                 last_sync,
                 error_message
             )
+
             VALUES (
                 %s,
                 %s,
@@ -340,6 +513,7 @@ def update_node_status(
             )
 
             ON CONFLICT (node_name)
+
             DO UPDATE SET
                 ma_kho = EXCLUDED.ma_kho,
                 host = EXCLUDED.host,
@@ -362,6 +536,7 @@ def update_node_status(
                 last_check,
                 error_message
             )
+
             VALUES (
                 %s,
                 %s,
@@ -373,6 +548,7 @@ def update_node_status(
             )
 
             ON CONFLICT (node_name)
+
             DO UPDATE SET
                 ma_kho = EXCLUDED.ma_kho,
                 host = EXCLUDED.host,
@@ -403,11 +579,12 @@ def update_node_status(
     except Exception:
 
         central_conn.rollback()
+
         raise
 
 
 # ============================================================
-# GHI LOG ĐỒNG BỘ
+# 11. GHI LOG ĐỒNG BỘ
 # ============================================================
 
 def write_sync_log(
@@ -434,6 +611,7 @@ def write_sync_log(
             status,
             error_message
         )
+
         VALUES (
             %s,
             %s,
@@ -471,11 +649,12 @@ def write_sync_log(
     except Exception:
 
         central_conn.rollback()
+
         raise
 
 
 # ============================================================
-# ĐỒNG BỘ MỘT NODE
+# 12. ĐỒNG BỘ MỘT NODE
 # ============================================================
 
 def sync_node(
@@ -489,14 +668,12 @@ def sync_node(
     started_at = datetime.now()
 
     print()
-    print("=" * 60)
-
+    print("=" * 70)
     print(
         f"[{started_at}] "
         f"ĐỒNG BỘ {node_name}"
     )
-
-    print("=" * 60)
+    print("=" * 70)
 
     node_conn = None
 
@@ -507,7 +684,7 @@ def sync_node(
     try:
 
         # ----------------------------------------------------
-        # 1. Kết nối NODE
+        # 1. KẾT NỐI NODE
         # ----------------------------------------------------
 
         node_conn = connect_database(
@@ -518,8 +695,9 @@ def sync_node(
             f"[OK] Kết nối {node_name}"
         )
 
+
         # ----------------------------------------------------
-        # 2. Lấy dữ liệu KHO
+        # 2. LẤY KHO
         # ----------------------------------------------------
 
         warehouses = get_warehouses(
@@ -531,8 +709,9 @@ def sync_node(
             f"{len(warehouses)}"
         )
 
+
         # ----------------------------------------------------
-        # 3. Lấy dữ liệu SẢN PHẨM
+        # 3. LẤY SẢN PHẨM
         # ----------------------------------------------------
 
         products = get_products(
@@ -544,8 +723,9 @@ def sync_node(
             f"{len(products)}"
         )
 
+
         # ----------------------------------------------------
-        # 4. Lấy dữ liệu TỒN KHO
+        # 4. LẤY TỒN KHO
         # ----------------------------------------------------
 
         inventory = get_inventory(
@@ -557,14 +737,35 @@ def sync_node(
             f"{len(inventory)}"
         )
 
+
+        # ----------------------------------------------------
+        # 5. LẤY NHẬP HÀNG
+        # ----------------------------------------------------
+
+        purchases = get_purchase_receipts(
+            node_conn
+        )
+
+        print(
+            f"[DATA] Số dòng nhập hàng: "
+            f"{len(purchases)}"
+        )
+
+
+        # ----------------------------------------------------
+        # 6. TÍNH TỔNG BẢN GHI
+        # ----------------------------------------------------
+
         records_processed = (
             len(warehouses)
             + len(products)
             + len(inventory)
+            + len(purchases)
         )
 
+
         # ----------------------------------------------------
-        # 5. ĐỒNG BỘ KHO
+        # 7. ĐỒNG BỘ KHO
         # ----------------------------------------------------
 
         sync_warehouses(
@@ -577,8 +778,9 @@ def sync_node(
             "[SYNC] Bảng kho: OK"
         )
 
+
         # ----------------------------------------------------
-        # 6. ĐỒNG BỘ SẢN PHẨM
+        # 8. ĐỒNG BỘ SẢN PHẨM
         # ----------------------------------------------------
 
         sync_products(
@@ -590,23 +792,46 @@ def sync_node(
             "[SYNC] Bảng sản phẩm: OK"
         )
 
+
         # ----------------------------------------------------
-        # 7. ĐỒNG BỘ TỒN KHO
+        # 9. ĐỒNG BỘ TỒN KHO
         # ----------------------------------------------------
 
         sync_inventory(
             central_conn,
-            inventory
+            inventory,
+            node_config
         )
 
         print(
             "[SYNC] Bảng tồn kho: OK"
         )
 
-        records_success = records_processed
 
         # ----------------------------------------------------
-        # 8. NODE ONLINE
+        # 10. ĐỒNG BỘ NHẬP HÀNG
+        # ----------------------------------------------------
+
+        sync_purchase_receipts(
+            central_conn,
+            purchases,
+            node_config
+        )
+
+        print(
+            "[SYNC] Bảng nhập hàng: OK"
+        )
+
+
+        # ----------------------------------------------------
+        # 11. TÍNH THÀNH CÔNG
+        # ----------------------------------------------------
+
+        records_success = records_processed
+
+
+        # ----------------------------------------------------
+        # 12. NODE ONLINE
         # ----------------------------------------------------
 
         update_node_status(
@@ -618,8 +843,9 @@ def sync_node(
             True
         )
 
+
         # ----------------------------------------------------
-        # 9. GHI LOG SUCCESS
+        # 13. GHI LOG SUCCESS
         # ----------------------------------------------------
 
         finished_at = datetime.now()
@@ -636,6 +862,7 @@ def sync_node(
             None
         )
 
+
         print(
             f"[SUCCESS] {node_name} "
             f"đồng bộ thành công"
@@ -645,6 +872,7 @@ def sync_node(
             f"[INFO] Thành công: "
             f"{records_success}/{records_processed}"
         )
+
 
     except Exception as error:
 
@@ -659,22 +887,28 @@ def sync_node(
             f"Chi tiết: {error}"
         )
 
+
         records_failed = max(
             records_processed - records_success,
             1
         )
 
+
         # ----------------------------------------------------
-        # Rollback transaction Central
+        # ROLLBACK CENTRAL
         # ----------------------------------------------------
 
         try:
+
             central_conn.rollback()
+
         except Exception:
+
             pass
 
+
         # ----------------------------------------------------
-        # Cập nhật NODE OFFLINE
+        # NODE OFFLINE
         # ----------------------------------------------------
 
         try:
@@ -703,9 +937,13 @@ def sync_node(
             )
 
             try:
+
                 central_conn.rollback()
+
             except Exception:
+
                 pass
+
 
         # ----------------------------------------------------
         # GHI LOG FAILED
@@ -741,9 +979,13 @@ def sync_node(
             )
 
             try:
+
                 central_conn.rollback()
+
             except Exception:
+
                 pass
+
 
     finally:
 
@@ -758,7 +1000,54 @@ def sync_node(
 
 
 # ============================================================
-# ĐỒNG BỘ TOÀN BỘ HỆ THỐNG
+# 13. ĐỌC CÁC PHIẾU ĐIỀU CHUYỂN ĐANG CHỜ
+# ============================================================
+
+def check_pending_transfers(central_conn):
+
+    try:
+
+        transfers = get_pending_transfers(
+            central_conn
+        )
+
+        print()
+        print(
+            f"[TRANSFER] Có {len(transfers)} "
+            f"phiếu điều chuyển đang chờ xử lý"
+        )
+
+        for transfer in transfers:
+
+            print(
+                f"[TRANSFER] "
+                f"{transfer[1]} | "
+                f"{transfer[2]} -> {transfer[3]} | "
+                f"{transfer[4]} | "
+                f"SL={transfer[5]} | "
+                f"STATUS={transfer[7]}"
+            )
+
+        return transfers
+
+    except Exception as error:
+
+        print(
+            "[ERROR] Không thể đọc "
+            "dieu_chuyen_central:"
+        )
+
+        print(
+            error
+        )
+
+        central_conn.rollback()
+
+        return []
+
+
+# ============================================================
+# 14. ĐỒNG BỘ TOÀN BỘ NODE
 # ============================================================
 
 def sync_all_nodes():
@@ -792,6 +1081,7 @@ def sync_all_nodes():
             "[OK] Kết nối CENTRAL"
         )
 
+
         # ----------------------------------------------------
         # ĐỒNG BỘ 3 NODE
         # ----------------------------------------------------
@@ -804,10 +1094,21 @@ def sync_all_nodes():
                 central_conn
             )
 
+
+        # ----------------------------------------------------
+        # KIỂM TRA ĐIỀU CHUYỂN
+        # ----------------------------------------------------
+
+        check_pending_transfers(
+            central_conn
+        )
+
+
         print()
         print(
             "[DONE] Hoàn tất chu kỳ đồng bộ"
         )
+
 
     except Exception as error:
 
@@ -819,6 +1120,7 @@ def sync_all_nodes():
         print(
             f"Chi tiết: {error}"
         )
+
 
     finally:
 
@@ -832,7 +1134,7 @@ def sync_all_nodes():
 
 
 # ============================================================
-# MAIN
+# 15. MAIN
 # ============================================================
 
 def main():
@@ -872,6 +1174,7 @@ def main():
         "Service đang chạy..."
     )
 
+
     # --------------------------------------------------------
     # CHẠY LIÊN TỤC
     # --------------------------------------------------------
@@ -882,6 +1185,7 @@ def main():
 
             sync_all_nodes()
 
+
         except KeyboardInterrupt:
 
             print()
@@ -891,22 +1195,26 @@ def main():
 
             break
 
+
         except Exception as error:
 
             print(
                 f"[ERROR] {error}"
             )
 
+
         print()
         print(
             f"Chờ {SYNC_INTERVAL} giây..."
         )
+
 
         try:
 
             time.sleep(
                 SYNC_INTERVAL
             )
+
 
         except KeyboardInterrupt:
 

@@ -1,0 +1,22 @@
+Mức 1 — Cốt lõi bắt buộc
+Sửa seed_data.py cho đúng logic nghiệp vụ.
+TON_KHO lưu tồn hiện tại.
+STOCK_LEDGER lưu toàn bộ biến động tồn.
+LICH_SU_TON_KHO lưu tổng hợp theo ngày.
+Nhập / xuất / điều chuyển làm thay đổi tồn đúng.
+Kiểm kê và điều chỉnh tồn.
+Điều chuyển có Saga + Outbox + TRANSIT.
+Transaction + locking để tránh sai tồn khi giao dịch đồng thời.
+Mức 2 — Hoàn thiện hệ thống
+Phân quyền người dùng theo chi nhánh.
+Audit trail người thực hiện.
+Lịch sử trạng thái điều chuyển.
+Xử lý node mất kết nối.
+Retry khi đồng bộ thất bại.
+Đồng bộ Node → Central.
+Central tổng hợp báo cáo toàn hệ thống.
+Dữ liệu từ PostgreSQL + MongoDB → ETL → Data Lake/Lakehouse → DWH.
+Data Mining dự báo nhu cầu.
+Phân tích dư/thiếu.
+Đề xuất điều chuyển.
+Power BI.

@@ -364,29 +364,67 @@ def insert_master_data(conn, branch, products):
 # =========================================================
 
 def generate_transactions(conn, branch, products):
+    """
+    Sinh dữ liệu nhập/xuất trong NUMBER_OF_DAYS ngày.
+
+    Quy tắc nghiệp vụ:
+        Tồn cuối ngày = Tồn đầu ngày + Nhập - Xuất
+
+    Dữ liệu được ghi vào:
+        1. ton_kho              : tồn hiện tại
+        2. lich_su_ton_kho      : tổng hợp tồn theo ngày
+        3. stock_ledger         : từng biến động nhập/xuất
+
+    Lưu ý:
+        - Tồn đầu kỳ của mỗi sản phẩm chỉ random MỘT LẦN.
+        - Không random lại tồn cuối.
+        - Không cho phép tồn âm.
+        - Ledger sử dụng số dương cho NHAP và số âm cho XUAT.
+    """
 
     ma_kho = WAREHOUSES[branch]["ma_kho"]
+    start_date = (
+        datetime.now().replace(
+            hour=0, minute=0, second=0, microsecond=0
+        )
+        - timedelta(days=NUMBER_OF_DAYS - 1)
+    )
 
-    start_date = datetime.now() - timedelta(days=NUMBER_OF_DAYS)
+    # =========================================================
+    # 1. TỒN ĐẦU KỲ
+    # =========================================================
 
-    inventory = {}
+    # Mỗi sản phẩm chỉ xác định tồn đầu kỳ MỘT LẦN.
+    # Từ đây trở đi mọi tồn kho đều được tính dựa trên biến inventory.
+    inventory = {
+        product["ma_sp"]: random.randint(300, 1000)
+        for product in products
+    }
 
-    # -----------------------------------------------------
-    # TỒN ĐẦU KỲ
-    # -----------------------------------------------------
-
-    for product in products:
-
-        inventory[product["ma_sp"]] = random.randint(100, 1000)
-
+    # Kiểm tra bảng stock_ledger đã tồn tại.
+    # Bảng này thuộc phần Level 2 của database.
     with conn.cursor() as cur:
+        cur.execute(
+            """
+            SELECT EXISTS (
+                SELECT 1
+                FROM information_schema.tables
+                WHERE table_schema = 'public'
+                  AND table_name = 'stock_ledger'
+            )
+            """
+        )
 
-        # -------------------------------------------------
-        # TẠO TỒN KHO BAN ĐẦU
-        # -------------------------------------------------
+        ledger_exists = cur.fetchone()[0]
 
+        if not ledger_exists:
+            raise RuntimeError(
+                f"[{branch}] Chưa có bảng stock_ledger. "
+                "Hãy chạy file SQL Level 2 trước khi seed dữ liệu."
+            )
+
+        # Tạo tồn ban đầu.
         for ma_sp, so_luong in inventory.items():
-
             cur.execute(
                 """
                 INSERT INTO ton_kho
@@ -396,33 +434,47 @@ def generate_transactions(conn, branch, products):
                     so_luong,
                     cap_nhat_luc
                 )
-                VALUES
-                (%s, %s, %s, CURRENT_TIMESTAMP)
+                VALUES (%s, %s, %s, %s)
                 ON CONFLICT (ma_kho, ma_sp)
                 DO UPDATE SET
                     so_luong = EXCLUDED.so_luong,
-                    cap_nhat_luc = CURRENT_TIMESTAMP
+                    cap_nhat_luc = EXCLUDED.cap_nhat_luc
                 """,
                 (
                     ma_kho,
                     ma_sp,
                     so_luong,
+                    start_date,
                 )
             )
 
         conn.commit()
 
-    # -----------------------------------------------------
-    # SINH DỮ LIỆU THEO NGÀY
-    # -----------------------------------------------------
+    # =========================================================
+    # 2. SINH DỮ LIỆU THEO NGÀY
+    # =========================================================
 
     for day_index in range(NUMBER_OF_DAYS):
 
         current_date = start_date + timedelta(days=day_index)
 
-        # ================================================
-        # NHẬP HÀNG
-        # ================================================
+        # Snapshot tồn đầu ngày.
+        opening_inventory = inventory.copy()
+
+        # Tổng nhập/xuất của từng sản phẩm trong ngày.
+        daily_import = {
+            product["ma_sp"]: 0
+            for product in products
+        }
+
+        daily_export = {
+            product["ma_sp"]: 0
+            for product in products
+        }
+
+        # =====================================================
+        # 2.1. NHẬP HÀNG
+        # =====================================================
 
         for import_index in range(IMPORTS_PER_DAY):
 
@@ -436,6 +488,14 @@ def generate_transactions(conn, branch, products):
 
             ngay_nhap = current_date + timedelta(
                 hours=random.randint(7, 17)
+            )
+
+            selected_products = random.sample(
+                products,
+                random.randint(
+                    1,
+                    min(3, len(products))
+                )
             )
 
             with conn.cursor() as cur:
@@ -452,6 +512,7 @@ def generate_transactions(conn, branch, products):
                     )
                     VALUES
                     (%s, %s, %s, %s, 'HOAN_THANH')
+                    ON CONFLICT (ma_phieu_nhap) DO NOTHING
                     """,
                     (
                         ma_phieu,
@@ -459,12 +520,6 @@ def generate_transactions(conn, branch, products):
                         f"NCC{supplier:03d}",
                         ngay_nhap,
                     )
-                )
-
-                # 1-3 sản phẩm / phiếu
-                selected_products = random.sample(
-                    products,
-                    random.randint(1, 3)
                 )
 
                 for product in selected_products:
@@ -486,6 +541,9 @@ def generate_transactions(conn, branch, products):
                         )
                         VALUES
                         (%s, %s, %s, %s)
+                        ON CONFLICT
+                            (ma_phieu_nhap, ma_sp)
+                        DO NOTHING
                         """,
                         (
                             ma_phieu,
@@ -495,13 +553,48 @@ def generate_transactions(conn, branch, products):
                         )
                     )
 
+                    # Cập nhật tồn trong bộ nhớ.
                     inventory[ma_sp] += so_luong
+
+                    # Cập nhật tổng nhập trong ngày.
+                    daily_import[ma_sp] += so_luong
+
+                    # Ghi ledger.
+                    cur.execute(
+                        """
+                        INSERT INTO stock_ledger
+                        (
+                            ma_kho,
+                            ma_sp,
+                            loai_giao_dich,
+                            so_luong,
+                            so_luong_thay_doi,
+                            ma_chung_tu,
+                            thoi_gian,
+                            nguoi_thuc_hien
+                        )
+                        VALUES
+                        (
+                            %s, %s, 'NHAP',
+                            %s, %s, %s, %s, %s
+                        )
+                        """,
+                        (
+                            ma_kho,
+                            ma_sp,
+                            so_luong,
+                            so_luong,
+                            ma_phieu,
+                            ngay_nhap,
+                            "SYSTEM_SEED",
+                        )
+                    )
 
                 conn.commit()
 
-        # ================================================
-        # XUẤT HÀNG
-        # ================================================
+        # =====================================================
+        # 2.2. XUẤT HÀNG
+        # =====================================================
 
         for export_index in range(EXPORTS_PER_DAY):
 
@@ -517,10 +610,11 @@ def generate_transactions(conn, branch, products):
                 hours=random.randint(8, 20)
             )
 
-            # Chỉ chọn sản phẩm còn đủ tồn
+            # Chỉ chọn sản phẩm còn tồn.
             available_products = [
-                p for p in products
-                if inventory[p["ma_sp"]] > 20
+                product
+                for product in products
+                if inventory[product["ma_sp"]] > 0
             ]
 
             if not available_products:
@@ -528,7 +622,10 @@ def generate_transactions(conn, branch, products):
 
             selected_products = random.sample(
                 available_products,
-                random.randint(1, 3)
+                random.randint(
+                    1,
+                    min(3, len(available_products))
+                )
             )
 
             with conn.cursor() as cur:
@@ -545,6 +642,7 @@ def generate_transactions(conn, branch, products):
                     )
                     VALUES
                     (%s, %s, %s, %s, 'HOAN_THANH')
+                    ON CONFLICT (ma_phieu_xuat) DO NOTHING
                     """,
                     (
                         ma_phieu,
@@ -558,14 +656,13 @@ def generate_transactions(conn, branch, products):
 
                     ma_sp = product["ma_sp"]
 
-                    # Số lượng bán có biến động
-                    so_luong = random.randint(1, 30)
-
-                    # Không cho tồn âm
-                    so_luong = min(
-                        so_luong,
+                    # Không cho phép xuất vượt quá tồn.
+                    max_export = min(
+                        random.randint(1, 30),
                         inventory[ma_sp]
                     )
+
+                    so_luong = max_export
 
                     if so_luong <= 0:
                         continue
@@ -583,6 +680,9 @@ def generate_transactions(conn, branch, products):
                         )
                         VALUES
                         (%s, %s, %s, %s)
+                        ON CONFLICT
+                            (ma_phieu_xuat, ma_sp)
+                        DO NOTHING
                         """,
                         (
                             ma_phieu,
@@ -592,13 +692,48 @@ def generate_transactions(conn, branch, products):
                         )
                     )
 
+                    # Trừ tồn.
                     inventory[ma_sp] -= so_luong
+
+                    # Tổng xuất trong ngày.
+                    daily_export[ma_sp] += so_luong
+
+                    # Ghi ledger.
+                    cur.execute(
+                        """
+                        INSERT INTO stock_ledger
+                        (
+                            ma_kho,
+                            ma_sp,
+                            loai_giao_dich,
+                            so_luong,
+                            so_luong_thay_doi,
+                            ma_chung_tu,
+                            thoi_gian,
+                            nguoi_thuc_hien
+                        )
+                        VALUES
+                        (
+                            %s, %s, 'XUAT',
+                            %s, %s, %s, %s, %s
+                        )
+                        """,
+                        (
+                            ma_kho,
+                            ma_sp,
+                            so_luong,
+                            -so_luong,
+                            ma_phieu,
+                            ngay_xuat,
+                            "SYSTEM_SEED",
+                        )
+                    )
 
                 conn.commit()
 
-        # ================================================
-        # GHI LỊCH SỬ TỒN KHO
-        # ================================================
+        # =====================================================
+        # 2.3. GHI LỊCH SỬ TỒN KHO THEO NGÀY
+        # =====================================================
 
         with conn.cursor() as cur:
 
@@ -606,8 +741,42 @@ def generate_transactions(conn, branch, products):
 
                 ma_sp = product["ma_sp"]
 
-                # Lấy tồn cuối ngày
+                ton_dau = opening_inventory[ma_sp]
+                nhap = daily_import[ma_sp]
+                xuat = daily_export[ma_sp]
                 ton_cuoi = inventory[ma_sp]
+
+                # =================================================
+                # KIỂM TRA CÔNG THỨC TỒN
+                # =================================================
+
+                expected_final = (
+                    ton_dau
+                    + nhap
+                    - xuat
+                )
+
+                if ton_cuoi != expected_final:
+                    raise ValueError(
+                        f"[{branch}] Sai cân bằng tồn kho "
+                        f"SP={ma_sp}, "
+                        f"ngày={current_date.date()}: "
+                        f"ton_dau={ton_dau}, "
+                        f"nhap={nhap}, "
+                        f"xuat={xuat}, "
+                        f"ton_cuoi={ton_cuoi}, "
+                        f"expected={expected_final}"
+                    )
+
+                if ton_cuoi < 0:
+                    raise ValueError(
+                        f"[{branch}] Phát hiện tồn âm "
+                        f"SP={ma_sp}: {ton_cuoi}"
+                    )
+
+                # =================================================
+                # GHI LỊCH SỬ
+                # =================================================
 
                 cur.execute(
                     """
@@ -626,15 +795,49 @@ def generate_transactions(conn, branch, products):
                     VALUES
                     (
                         %s, %s, %s,
-                        %s, 0, 0, 0, 0, %s
+                        %s, %s, %s,
+                        0, 0, %s
                     )
+                    ON CONFLICT DO NOTHING
                     """,
                     (
                         ma_kho,
                         ma_sp,
                         current_date.date(),
+                        ton_dau,
+                        nhap,
+                        xuat,
                         ton_cuoi,
-                        ton_cuoi,
+                    )
+                )
+
+            conn.commit()
+
+        # =====================================================
+        # 2.4. CẬP NHẬT TỒN HIỆN TẠI
+        # =====================================================
+
+        with conn.cursor() as cur:
+
+            for ma_sp, so_luong in inventory.items():
+
+                cur.execute(
+                    """
+                    UPDATE ton_kho
+                    SET
+                        so_luong = %s,
+                        cap_nhat_luc = %s
+                    WHERE ma_kho = %s
+                      AND ma_sp = %s
+                    """,
+                    (
+                        so_luong,
+                        current_date + timedelta(
+                            hours=23,
+                            minutes=59
+                        ),
+                        ma_kho,
+                        ma_sp,
                     )
                 )
 
@@ -644,91 +847,40 @@ def generate_transactions(conn, branch, products):
 
             print(
                 f"[{branch}] "
-                f"Đã sinh {day_index + 1}/{NUMBER_OF_DAYS} ngày"
+                f"Đã sinh {day_index + 1}/"
+                f"{NUMBER_OF_DAYS} ngày"
             )
 
-
-# =========================================================
-# CẬP NHẬT TỒN KHO CUỐI CÙNG
-# =========================================================
-
-def update_final_inventory(conn, branch, products):
-
-    ma_kho = WAREHOUSES[branch]["ma_kho"]
+    # =========================================================
+    # 3. KIỂM TRA CUỐI CÙNG
+    # =========================================================
 
     with conn.cursor() as cur:
 
-        for product in products:
+        cur.execute(
+            """
+            SELECT
+                COUNT(*),
+                COALESCE(SUM(so_luong), 0)
+            FROM ton_kho
+            WHERE ma_kho = %s
+            """,
+            (ma_kho,)
+        )
 
-            ma_sp = product["ma_sp"]
+        row_count, total_inventory = cur.fetchone()
 
-            cur.execute(
-                """
-                SELECT COALESCE(
-                    SUM(ct.so_luong), 0
-                )
-                FROM ct_phieu_nhap ct
-                JOIN phieu_nhap pn
-                    ON ct.ma_phieu_nhap = pn.ma_phieu_nhap
-                WHERE pn.ma_kho = %s
-                  AND ct.ma_sp = %s
-                """,
-                (
-                    ma_kho,
-                    ma_sp,
-                )
-            )
+        print(
+            f"[{branch}] "
+            f"Kiểm tra tồn cuối: "
+            f"{row_count} sản phẩm, "
+            f"tổng tồn = {total_inventory}"
+        )
 
-            total_import = cur.fetchone()[0]
-
-            cur.execute(
-                """
-                SELECT COALESCE(
-                    SUM(ct.so_luong), 0
-                )
-                FROM ct_phieu_xuat ct
-                JOIN phieu_xuat px
-                    ON ct.ma_phieu_xuat = px.ma_phieu_xuat
-                WHERE px.ma_kho = %s
-                  AND ct.ma_sp = %s
-                """,
-                (
-                    ma_kho,
-                    ma_sp,
-                )
-            )
-
-            total_export = cur.fetchone()[0]
-
-            # Lấy tồn ban đầu
-            initial_inventory = random.randint(100, 1000)
-
-            final_inventory = (
-                initial_inventory
-                + total_import
-                - total_export
-            )
-
-            if final_inventory < 0:
-                final_inventory = 0
-
-            cur.execute(
-                """
-                UPDATE ton_kho
-                SET
-                    so_luong = %s,
-                    cap_nhat_luc = CURRENT_TIMESTAMP
-                WHERE ma_kho = %s
-                  AND ma_sp = %s
-                """,
-                (
-                    final_inventory,
-                    ma_kho,
-                    ma_sp,
-                )
-            )
-
-    conn.commit()
+    print(
+        f"[{branch}] "
+        f"Hoàn tất sinh {NUMBER_OF_DAYS} ngày dữ liệu."
+    )
 
 
 # =========================================================
@@ -762,7 +914,7 @@ def seed_branch(branch, products):
                 products
             )
 
-            print(f"[{branch}] Đã sinh dữ liệu giao dịch")
+            print(f"[{branch}] Đã sinh dữ liệu giao dịch + lịch sử + ledger")
 
         print(f"[{branch}] HOÀN THÀNH")
 
