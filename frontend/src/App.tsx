@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
 import { WarehouseProvider } from './contexts/WarehouseContext';
@@ -11,6 +10,7 @@ import Transfer from './pages/Transfer';
 import AuditLogs from './pages/AuditLogs';
 import WarehouseMap from './pages/WarehouseMap';
 import Login from './pages/Login';
+import Approvals from './pages/Approvals';
 
 function AppRoutes() {
   const { isAuthenticated } = useAuth();
@@ -39,6 +39,7 @@ function AppRoutes() {
           <Route path="/export" element={<Inventory />} />
           <Route path="/transfer" element={<Transfer />} />
           <Route path="/audit" element={<AuditLogs />} />
+          <Route path="/approvals" element={<Approvals />} />
           <Route path="/logs" element={<AuditLogs />} />
           <Route path="/reports" element={<Dashboard />} />
         </Route>

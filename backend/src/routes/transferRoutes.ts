@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { handleTransfer } from '../controllers/transferController';
+import { handleApproveTransfer, handleTransfer } from '../controllers/transferController';
 import { verifyToken, branchGuard, verifyRole } from '../middlewares/auth';
 import { dbSelector } from '../middlewares/dbSelector';
 
@@ -15,4 +15,12 @@ router.post(
   handleTransfer
 );
 
+router.post(
+  '/:maPhieu/approve',
+  verifyToken,
+  dbSelector,
+  branchGuard,
+  verifyRole(['ADMIN', 'MANAGER']),
+  handleApproveTransfer
+);
 export default router;

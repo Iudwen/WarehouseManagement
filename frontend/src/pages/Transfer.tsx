@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import api from '../services/api';
+import { getApiErrorMessage } from '../services/apiError';
 
 export default function Transfer() {
   const [formData, setFormData] = useState({
@@ -27,10 +28,13 @@ export default function Transfer() {
         kho_nhap: formData.kho_nhap,
         items: [{ ma_sp: formData.ma_sp, so_luong: Number(formData.so_luong) }],
       };
-      await api.post('/transfer', payload)
-      setStatus({ type: 'success', text: '✅ Điều chuyển kho thành công!' });
-    } catch (err: any) {
-      setStatus({ type: 'error', text: `❌ Lỗi: ${err.response?.data?.message || err.message}` });
+      const response = await api.post('/transfer', payload);
+      const message = response.data.data?.trang_thai === 'PENDING'
+        ? 'Đã tạo yêu cầu điều chuyển, đang chờ duyệt.'
+        : 'Đã tạo yêu cầu điều chuyển.';
+      setStatus({ type: 'success', text: message });
+    } catch (err: unknown) {
+      setStatus({ type: 'error', text: `❌ Lỗi: ${getApiErrorMessage(err, 'Không thể điều chuyển kho')}` });
     }
   };
 

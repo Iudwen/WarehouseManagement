@@ -1,5 +1,5 @@
-import React from 'react';
 import { Link, useLocation } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext';
 import { 
   LayoutDashboard, 
   Package, 
@@ -14,6 +14,7 @@ import {
 
 export default function Sidebar() {
   const location = useLocation();
+  const { user } = useAuth();
 
   const menuItems = [
     { path: '/', label: 'Tổng Quan', icon: LayoutDashboard },
@@ -23,6 +24,9 @@ export default function Sidebar() {
     { path: '/export', label: 'Xuất Kho', icon: ArrowUpRight },
     { path: '/transfer', label: 'Điều Chuyển', icon: ArrowLeftRight },
     { path: '/audit', label: 'Kiểm Kê Kho', icon: ClipboardCheck },
+    ...(user?.vai_tro === 'ADMIN' || user?.vai_tro === 'MANAGER'
+      ? [{ path: '/approvals', label: 'Duyệt Phiếu', icon: ClipboardCheck }]
+      : []),
     { path: '/reports', label: 'Báo Cáo & Thống Kê', icon: BarChart3 },
   ];
 

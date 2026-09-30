@@ -16,7 +16,8 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
   try {
     // Kết nối CSDL để kiểm tra tài khoản (Query qua node HN01 hoặc kho chỉ định)
-    const pool = getDbPool(ma_kho || 'HN01');
+    const requestedKho = String(ma_kho || 'HN01').trim().toUpperCase();
+    const pool = getDbPool(requestedKho);
 
     const query = `
       SELECT ma_nguoi_dung, ma_kho, ho_ten, email, mat_khau, vai_tro, trang_thai 
@@ -32,8 +33,16 @@ export const login = async (req: Request, res: Response): Promise<void> => {
 
     const user = result.rows[0];
 
-    if (user.trang_thai === 'LOCKED') {
-      res.status(403).json({ message: 'Tài khoản của bạn đã bị khóa' });
+    if (user.trang_thai !== 'ACTIVE') {
+      res.status(403).json({ message: 'Tài khoản của bạn không ở trạng thái hoạt động' });
+      return;
+    }
+
+    if (
+      user.vai_tro !== 'ADMIN' &&
+      (!user.ma_kho || user.ma_kho.toUpperCase() !== requestedKho)
+    ) {
+      res.status(403).json({ message: 'Tài khoản không thuộc node kho đăng nhập' });
       return;
     }
 

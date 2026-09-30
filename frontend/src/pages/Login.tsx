@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
+import { getApiErrorMessage } from '../services/apiError';
 
 export default function Login() {
   const [email, setEmail] = useState('');
@@ -32,8 +33,8 @@ export default function Login() {
       
       // Đăng nhập thành công -> Chuyển sang trang Dashboard chính
       navigate('/');
-    } catch (err: any) {
-      setError(err.response?.data?.message || 'Đăng nhập thất bại. Vui lòng kiểm tra lại!');
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Đăng nhập thất bại. Vui lòng kiểm tra lại!'));
     } finally {
       setLoading(false);
     }

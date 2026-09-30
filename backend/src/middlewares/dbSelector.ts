@@ -38,6 +38,7 @@ export const dbSelector = (req: CustomRequest, res: Response, next: NextFunction
 
     next();
   } catch (error: any) {
-    res.status(500).json({ message: `Lỗi phân phối kết nối CSDL Node: ${error.message}` });
+    const status = error.message?.startsWith('Mã kho không hợp lệ') ? 400 : 500;
+    res.status(status).json({ message: `Lỗi phân phối kết nối CSDL Node: ${error.message}` });
   }
 };

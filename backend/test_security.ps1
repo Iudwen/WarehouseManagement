@@ -4,6 +4,8 @@
 $OutputEncoding = [System.Text.Encoding]::UTF8
 $ErrorActionPreference = "Continue"
 $API_URL = "http://localhost:5000/api/v1"
+$ROOT_URL = "http://localhost:5000"
+$script:FailedTests = 0
 
 function Request-API {
     param(
@@ -26,7 +28,8 @@ function Request-API {
     $jsonBody = if ($Body) { ConvertTo-Json -InputObject $Body -Depth 8 -Compress } else { $null }
 
     try {
-        $res = Invoke-WebRequest -Uri "$API_URL$Endpoint" -Method $Method -Headers $headers -Body $jsonBody -ContentType "application/json" -UseBasicParsing
+        $baseUrl = if ($Endpoint -eq "/health") { $ROOT_URL } else { $API_URL }
+        $res = Invoke-WebRequest -Uri "$baseUrl$Endpoint" -Method $Method -Headers $headers -Body $jsonBody -ContentType "application/json" -UseBasicParsing
         return @{ Status = [int]$res.StatusCode; Data = $res.Content }
     }
     catch [System.Net.WebException] {
@@ -59,6 +62,7 @@ function Assert-Test {
         Write-Host " [PASS $ActualStatus] $Title" -ForegroundColor Green
     }
     else {
+        $script:FailedTests++
         Write-Host " [FAIL $ActualStatus - expected $ExpectedStatus] $Title" -ForegroundColor Red
     }
 }
@@ -66,10 +70,11 @@ function Assert-Test {
 function Get-LoginToken {
     param(
         [string]$Email,
-        [string]$Password
+        [string]$Password,
+        [string]$MaKho = "HN01"
     )
 
-    $loginRes = Request-API -Method "POST" -Endpoint "/auth/login" -Body @{ email = $Email; password = $Password }
+    $loginRes = Request-API -Method "POST" -Endpoint "/auth/login" -Body @{ email = $Email; password = $Password; ma_kho = $MaKho }
     if ($loginRes.Status -eq 200) {
         try {
             $payload = ConvertFrom-Json -InputObject $loginRes.Data
@@ -97,19 +102,20 @@ function Write-ApiSummary {
 }
 
 function Check-FrontendRisks {
-    Write-Host "`n=== KIEM TRA RUI RO TIEM AN FRONTEND ===" -ForegroundColor Yellow
+    Write-Host "`n=== KIEM TRA FRONTEND ===" -ForegroundColor Yellow
 
     $risks = @(
-        "- FE đang hardcode baseURL = http://localhost:5000/api/v1 trong [frontend/src/services/api.ts]; nếu backend đổi port hoặc deploy khác môi trường => FE fail toàn bộ.",
-        "- localStorage.getItem('wms_token') được đọc trực tiếp mà không có guard cho môi trường SSR/non-browser; nếu FE render ở server hoặc test ngoài browser có thể nổ exception.",
-        "- Interceptor gắn Bearer Token nhưng không xử lý 401/403 bằng redirect logout hay refresh token; user sẽ bị treo ở màn hình không có lỗi rõ ràng.",
-        "- Không có timeout/ retry/ fallback cho network error; khi backend chậm hoặc mất kết nối, UI sẽ bị trạng thái treo hoặc màn hình trắng nếu chưa có error boundary.",
-        "- Nếu API trả về { success: false } mà UI chỉ đọc .data hoặc .items mà không kiểm tra mã lỗi, frontend có thể hiển thị dữ liệu sai hoặc crash khi null.",
-        "- Route auth/role guard phụ thuộc vào token; nếu refresh token không đúng hoặc token hết hạn, mọi request sẽ bị reject mà không có UX rõ ràng."
+        "[DA SUA] API URL dung VITE_API_URL, mac dinh dung /api/v1 qua Vite proxy.",
+        "[DA SUA] Token storage co guard cho moi truong khong co window.",
+        "[DA SUA] HTTP 401 se xoa phien va dua nguoi dung ve trang login.",
+        "[DA SUA] API client co timeout 10 giay; can bo sung retry/error boundary neu can UX nang cao.",
+        "[CAN KIEM TRA TIEP] Cac page can chuan hoa response loi va gia tri null tu API.",
+        "[CAN KIEM TRA TIEP] Can test UX khi token het han va khi backend mat ket noi."
     )
 
     foreach ($risk in $risks) {
-        Write-Host $risk -ForegroundColor DarkYellow
+        $color = if ($risk.StartsWith('[DA SUA]')) { 'Green' } else { 'DarkYellow' }
+        Write-Host $risk -ForegroundColor $color
     }
 }
 
@@ -128,6 +134,9 @@ $adminLogin = Get-LoginToken -Email "admin@wms.com" -Password "123456"
 
 $staffToken = $staffLogin.Token
 $adminToken = $adminLogin.Token
+
+$wrongBranchLogin = Get-LoginToken -Email "cuong_hn@wms.com" -Password "123456" -MaKho "DN01"
+Assert-Test -Title "Staff cannot login to another branch" -ActualStatus $wrongBranchLogin.Status -ExpectedStatus 403
 
 if (-not $staffToken) {
     Write-Host " Loi: Khong the dang nhap STAFF!" -ForegroundColor Red
@@ -155,7 +164,7 @@ Assert-Test -Title "No token -> GET /dashboard/summary" -ActualStatus $t1.Status
 # Test 3.2 Staff cannot transfer
 if ($staffToken) {
     $t2 = Request-API -Method "POST" -Endpoint "/transfer" -Token $staffToken -Body @{
-        ma_phieu_dc = "DC_TEST_01"; kho_xuat = "HN01"; kho_nhap = "DN01"; items = @(@{ ma_sp = "SP01"; so_luong = 1 })
+        ma_phieu_dc = "DC_TEST_01"; kho_xuat = "HN01"; kho_nhap = "DN01"; items = @(@{ ma_sp = "SP_TV_OLED_55"; so_luong = 1 })
     }
     Assert-Test -Title "Staff cannot create transfer" -ActualStatus $t2.Status -ExpectedStatus 403
 }
@@ -175,7 +184,7 @@ else {
 # Test 3.4 Staff branch mismatch block
 if ($staffToken) {
     $t4 = Request-API -Method "POST" -Endpoint "/inventory/import" -Token $staffToken -Body @{
-        ma_kho = "HCM01"; ma_ncc = "NCC001"; items = @(@{ ma_sp = "SP01"; so_luong = 5; don_gia = 100 })
+        ma_kho = "HCM01"; ma_ncc = "NCC001"; items = @(@{ ma_sp = "SP_TV_OLED_55"; so_luong = 5; don_gia = 15000000 })
     }
     Assert-Test -Title "Staff branch mismatch blocked" -ActualStatus $t4.Status -ExpectedStatus 403
 }
@@ -219,7 +228,7 @@ $validImportPayload = @{
     ma_kho = "HN01";
     ma_ncc = "NCC001";
     items = @(
-        @{ ma_sp = "SP01"; so_luong = 5; don_gia = 100 }
+        @{ ma_sp = "SP_TV_OLED_55"; so_luong = 1; don_gia = 15000000 }
     )
 }
 
@@ -236,7 +245,7 @@ $validExportPayload = @{
     ma_kho = "HN01";
     ma_kh = "KH001";
     items = @(
-        @{ ma_sp = "SP01"; so_luong = 2 }
+        @{ ma_sp = "SP_TV_OLED_55"; so_luong = 1; don_gia = 18000000 }
     )
 }
 
@@ -253,3 +262,11 @@ else {
 Check-FrontendRisks
 
 Write-Host "`n=== HOAN THANH KIEM THU API BACKEND ===" -ForegroundColor Cyan
+
+if ($script:FailedTests -gt 0) {
+    Write-Host "`nTong so test that bai: $script:FailedTests" -ForegroundColor Red
+    exit 1
+}
+
+Write-Host "Tat ca test API deu PASS." -ForegroundColor Green
+exit 0

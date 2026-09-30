@@ -82,6 +82,9 @@ ALTER TABLE lich_su_ton_kho
 ADD CONSTRAINT fk_lstk_sp_dn
 FOREIGN KEY (ma_sp)
 REFERENCES san_pham(ma_sp);
+ALTER TABLE lich_su_ton_kho
+ADD CONSTRAINT uq_lstk_kho_sp_ngay
+UNIQUE (ma_kho, ma_sp, ngay);
 
 ALTER TABLE nguoi_dung
 ADD CONSTRAINT fk_nd_kho_dn

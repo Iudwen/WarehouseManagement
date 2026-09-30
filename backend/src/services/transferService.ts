@@ -1,5 +1,4 @@
-import { getDbPool } from '../config/postgresql';
-import { logTransferEvent } from './eventLogger';
+import { pools } from '../config/postgresql';
 
 export interface TransferPayload {
   ma_phieu_dc: string;
@@ -8,122 +7,120 @@ export interface TransferPayload {
   items: Array<{ ma_sp: string; so_luong: number }>;
 }
 
-export const processTransfer = async (payload: TransferPayload, userKho?: string, userRole?: string) => {
-  const { ma_phieu_dc, kho_xuat, kho_nhap, items } = payload;
+const nodeByWarehouse: Record<string, string> = {
+  HN01: 'NODE_HN',
+  DN01: 'NODE_DN',
+  HCM01: 'NODE_HCM',
+};
 
-  // 1. Validation Logic
-  if (!items || items.length === 0) {
-    throw new Error('Danh sách hàng hóa điều chuyển không được để rỗng');
+const validateTransfer = (payload: TransferPayload, userKho?: string, userRole?: string): void => {
+  const { ma_phieu_dc, kho_xuat, kho_nhap, items } = payload;
+  const normalizedSource = kho_xuat?.trim().toUpperCase();
+  const normalizedDestination = kho_nhap?.trim().toUpperCase();
+
+  if (!ma_phieu_dc || ma_phieu_dc.length > 20) {
+    throw new Error('Mã phiếu điều chuyển phải có từ 1 đến 20 ký tự');
   }
 
-  if (kho_xuat.toUpperCase() === kho_nhap.toUpperCase()) {
+  if (!items || items.length !== 1) {
+    throw new Error('Mỗi yêu cầu điều chuyển hiện chỉ hỗ trợ một sản phẩm');
+  }
+
+  if (!nodeByWarehouse[normalizedSource] || !nodeByWarehouse[normalizedDestination]) {
+    throw new Error('Kho xuất hoặc kho nhập không hợp lệ');
+  }
+
+  if (normalizedSource === normalizedDestination) {
     throw new Error('Kho xuất và Kho nhập không được trùng nhau');
   }
 
-  // Vá lỗ hổng Security: Kiểm tra quyền sở hữu kho xuất tại Service
-  if (userRole !== 'ADMIN' && userKho && userKho.toUpperCase() !== kho_xuat.toUpperCase()) {
-    throw new Error(`Tài khoản thuộc kho ${userKho}, không có quyền xuất hàng từ kho ${kho_xuat}`);
+  if (!items[0].ma_sp || items[0].so_luong <= 0) {
+    throw new Error('Sản phẩm và số lượng điều chuyển phải hợp lệ');
   }
 
-  const poolExport = getDbPool(kho_xuat);
-  const poolImport = getDbPool(kho_nhap);
+  if (userRole !== 'ADMIN' && userKho?.toUpperCase() !== normalizedSource) {
+    throw new Error(`Tài khoản thuộc kho ${userKho}, không có quyền xuất hàng từ kho ${normalizedSource}`);
+  }
+};
 
-  const clientExport = await poolExport.connect();
-  const clientImport = await poolImport.connect();
+export const processTransfer = async (
+  payload: TransferPayload,
+  userKho?: string,
+  userRole?: string,
+) => {
+  validateTransfer(payload, userKho, userRole);
 
-  let isExportCommitted = false;
+  const sourceWarehouse = payload.kho_xuat.trim().toUpperCase();
+  const destinationWarehouse = payload.kho_nhap.trim().toUpperCase();
+  const client = await pools.CENTRAL.connect();
 
   try {
-    // Phase 1: Mở Transaction trên cả 2 Node
-    await clientExport.query('BEGIN');
-    await clientImport.query('BEGIN');
-
-    // Trừ kho tại Node Xuất (Lock dòng bằng FOR UPDATE)
-    for (const item of items) {
-      const res = await clientExport.query(
-        `SELECT so_luong FROM ton_kho WHERE ma_kho = $1 AND ma_sp = $2 FOR UPDATE`,
-        [kho_xuat, item.ma_sp]
-      );
-      
-      const currentStock = res.rows[0]?.so_luong || 0;
-      if (currentStock < item.so_luong) {
-        throw new Error(`Kho xuất ${kho_xuat} không đủ sản phẩm ${item.ma_sp} (Tồn hiện tại: ${currentStock})`);
-      }
-
-      await clientExport.query(
-        `UPDATE ton_kho SET so_luong = so_luong - $1, cap_nhat_luc = NOW() 
-         WHERE ma_kho = $2 AND ma_sp = $3`,
-        [item.so_luong, kho_xuat, item.ma_sp]
-      );
-
-      await clientExport.query(
-        `INSERT INTO lich_su_ton_kho (ma_kho, ma_sp, ngay, dieu_chuyen_ra) 
-         VALUES ($1, $2, CURRENT_DATE, $3)
-         ON CONFLICT (ma_kho, ma_sp, ngay) 
-         DO UPDATE SET dieu_chuyen_ra = lich_su_ton_kho.dieu_chuyen_ra + EXCLUDED.dieu_chuyen_ra`,
-        [kho_xuat, item.ma_sp, item.so_luong]
-      );
-    }
-
-    // Ghi nhận chứng từ phiếu điều chuyển tại Node Xuất
-    await clientExport.query(
-      `INSERT INTO phieu_dieu_chuyen (ma_phieu_dc, kho_xuat, kho_nhap, ngay_dieu_chuyen, trang_thai)
-       VALUES ($1, $2, $3, NOW(), 'COMPLETED')`,
-      [ma_phieu_dc, kho_xuat, kho_nhap]
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO dieu_chuyen_central
+        (ma_phieu_dc, kho_xuat, kho_nhap, ma_sp, so_luong, ngay_dieu_chuyen, trang_thai, source_node)
+       VALUES ($1, $2, $3, $4, $5, NOW(), 'PENDING', $6)`,
+      [
+        payload.ma_phieu_dc,
+        sourceWarehouse,
+        destinationWarehouse,
+        payload.items[0].ma_sp,
+        payload.items[0].so_luong,
+        nodeByWarehouse[sourceWarehouse],
+      ],
     );
+    await client.query('COMMIT');
 
-    for (const item of items) {
-      await clientExport.query(
-        `INSERT INTO ct_dieu_chuyen (ma_phieu_dc, ma_sp, so_luong) VALUES ($1, $2, $3)`,
-        [ma_phieu_dc, item.ma_sp, item.so_luong]
-      );
-    }
-
-    // Cộng kho tại Node Nhập
-    for (const item of items) {
-      await clientImport.query(
-        `INSERT INTO ton_kho (ma_kho, ma_sp, so_luong, cap_nhat_luc)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (ma_kho, ma_sp) 
-         DO UPDATE SET so_luong = ton_kho.so_luong + EXCLUDED.so_luong, cap_nhat_luc = NOW()`,
-        [kho_nhap, item.ma_sp, item.so_luong]
-      );
-
-      await clientImport.query(
-        `INSERT INTO lich_su_ton_kho (ma_kho, ma_sp, ngay, dieu_chuyen_vao) 
-         VALUES ($1, $2, CURRENT_DATE, $3)
-         ON CONFLICT (ma_kho, ma_sp, ngay) 
-         DO UPDATE SET dieu_chuyen_vao = lich_su_ton_kho.dieu_chuyen_vao + EXCLUDED.dieu_chuyen_vao`,
-        [kho_nhap, item.ma_sp, item.so_luong]
-      );
-    }
-
-    // Phase 2: An toàn 2PC - COMMIT Node Nhập trước, Node Xuất sau
-    await clientImport.query('COMMIT');
-    
-    try {
-      await clientExport.query('COMMIT');
-      isExportCommitted = true;
-    } catch (exportCommitErr) {
-      // Trường hợp hiếm: Node Nhập đã Commit nhưng Node Xuất sập mạng lúc Commit
-      console.error('CRITICAL: Node Nhập đã Commit nhưng Node Xuất thất bại!', exportCommitErr);
-      throw new Error('Lỗi đồng bộ nghiêm trọng giữa các chi nhánh. Cần kiểm tra log thủ công.');
-    }
-
-    // Ghi Log lịch sử ra MongoDB
-    logTransferEvent({ ma_phieu_dc, kho_xuat, kho_nhap, items });
-
-    return { success: true, ma_phieu_dc };
-
+    return {
+      success: true,
+      ma_phieu_dc: payload.ma_phieu_dc,
+      trang_thai: 'PENDING',
+    };
   } catch (error) {
-    // Chỉ ROLLBACK Node Xuất nếu nó chưa COMMIT thành công
-    if (!isExportCommitted) {
-      await clientExport.query('ROLLBACK').catch(() => {});
-    }
-    await clientImport.query('ROLLBACK').catch(() => {});
+    await client.query('ROLLBACK');
     throw error;
   } finally {
-    clientExport.release();
-    clientImport.release();
+    client.release();
+  }
+};
+
+export const approveTransfer = async (maPhieuDc: string) => {
+  const client = await pools.CENTRAL.connect();
+
+  try {
+    await client.query('BEGIN');
+    const result = await client.query(
+      `SELECT trang_thai
+       FROM dieu_chuyen_central
+       WHERE ma_phieu_dc = $1
+       FOR UPDATE`,
+      [maPhieuDc],
+    );
+
+    if (!result.rows[0]) {
+      throw new Error('Không tìm thấy yêu cầu điều chuyển');
+    }
+
+    if (result.rows[0].trang_thai !== 'PENDING') {
+      throw new Error(`Yêu cầu đang ở trạng thái ${result.rows[0].trang_thai}`);
+    }
+
+    const saga = await client.query(
+      `SELECT sp_create_saga($1) AS saga_id`,
+      [maPhieuDc],
+    );
+    await client.query('COMMIT');
+
+    return {
+      success: true,
+      ma_phieu_dc: maPhieuDc,
+      saga_id: saga.rows[0].saga_id,
+      trang_thai: 'DANG_XU_LY',
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
 };

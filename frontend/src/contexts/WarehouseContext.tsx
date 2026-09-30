@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import { createContext, useContext, useState, useEffect } from 'react';
+import type { FC, ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 
 interface WarehouseContextType {
@@ -8,26 +9,33 @@ interface WarehouseContextType {
 
 const WarehouseContext = createContext<WarehouseContextType | undefined>(undefined);
 
-export const WarehouseProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+export const WarehouseProvider: FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
 
   // Thứ tự ưu tiên: 1. Kho đã chọn gần nhất (localStorage) -> 2. Kho mặc định của User -> 3. HN01
   const [selectedWarehouse, setSelectedWarehouseState] = useState<string>(() => {
-    const savedWarehouse = localStorage.getItem('selectedWarehouse');
+    const savedWarehouse = typeof window !== 'undefined'
+      ? window.localStorage.getItem('selectedWarehouse')
+      : null;
     if (savedWarehouse) return savedWarehouse;
-    return user?.defaultWarehouse || 'HN01';
+    return user?.ma_kho || 'HN01';
   });
 
   // Tự động đồng bộ kho theo User khi vừa đăng nhập
   useEffect(() => {
-    if (user?.defaultWarehouse && !localStorage.getItem('selectedWarehouse')) {
-      setSelectedWarehouseState(user.defaultWarehouse);
+    const savedWarehouse = typeof window !== 'undefined'
+      ? window.localStorage.getItem('selectedWarehouse')
+      : null;
+    if (user?.ma_kho && !savedWarehouse) {
+      setSelectedWarehouseState(user.ma_kho);
     }
   }, [user]);
 
   // Hàm setter tự động lưu vào localStorage khi đổi kho
   const setSelectedWarehouse = (wh: string) => {
-    localStorage.setItem('selectedWarehouse', wh);
+    if (typeof window !== 'undefined') {
+      window.localStorage.setItem('selectedWarehouse', wh);
+    }
     setSelectedWarehouseState(wh);
   };
 

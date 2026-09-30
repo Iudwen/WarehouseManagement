@@ -1,5 +1,6 @@
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
+import { getApiErrorMessage } from '../services/apiError';
 import { useWarehouse } from '../contexts/WarehouseContext';
 import type { MongoEventLog } from '../types';
 
@@ -7,22 +8,24 @@ export default function AuditLogs() {
   const { selectedWarehouse } = useWarehouse();
   const [logs, setLogs] = useState<MongoEventLog[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const fetchLogs = async () => {
+  const fetchLogs = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const res = await api.get(`/audit/logs?ma_kho=${selectedWarehouse}`);
       setLogs(res.data.data || res.data || []);
-    } catch (err) {
-      console.error('Lỗi khi tải Audit Logs:', err);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Không thể tải nhật ký hệ thống.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedWarehouse]);
 
   useEffect(() => {
     fetchLogs();
-  }, [selectedWarehouse]);
+  }, [fetchLogs]);
 
   return (
     <div className="p-6 max-w-4xl mx-auto bg-white rounded-xl shadow-md border mt-6">
@@ -38,6 +41,15 @@ export default function AuditLogs() {
           🔄 Làm mới
         </button>
       </div>
+
+      {error && (
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          <span>{error}</span>
+          <button onClick={fetchLogs} className="font-semibold underline">
+            Thử lại
+          </button>
+        </div>
+      )}
 
       {loading ? (
         <div className="py-8 text-center text-slate-500 text-sm">Đang tải nhật ký từ MongoDB...</div>

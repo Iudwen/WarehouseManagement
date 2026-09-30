@@ -77,6 +77,9 @@ ADD CONSTRAINT fk_central_import_sp
 FOREIGN KEY (ma_sp)
 REFERENCES san_pham(ma_sp);
 
+ALTER TABLE nhap_hang_central
+ADD CONSTRAINT uq_nhap_hang_central
+UNIQUE (ma_phieu_nhap, ma_kho, ma_sp, source_node);
 
 -- =========================================================
 -- ĐIỀU CHUYỂN

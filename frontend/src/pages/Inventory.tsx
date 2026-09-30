@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useWarehouse } from '../contexts/WarehouseContext';
 import api from '../services/api';
+import { getApiErrorMessage } from '../services/apiError';
 import type { MasterData } from '../types';
 import { ArrowDownLeft, ArrowUpRight, CheckCircle2, Lock, Sparkles } from 'lucide-react';
 
@@ -14,6 +15,7 @@ export default function Inventory() {
 
   const [master, setMaster] = useState<MasterData | null>(null);
   const [loadingMaster, setLoadingMaster] = useState<boolean>(true);
+  const [masterError, setMasterError] = useState('');
   
   // Hàm tạo chuỗi hiển thị mã giao dịch dự kiến chuẩn 19 ký tự (YYMMDD)
   const generateFrontendPreviewCode = (importing: boolean, kho: string) => {
@@ -50,6 +52,7 @@ export default function Inventory() {
   useEffect(() => {
     const fetchMaster = async () => {
       setLoadingMaster(true);
+      setMasterError('');
       try {
         const res = await api.get(`/master-data?ma_kho=${selectedWarehouse}`);
         const data: MasterData = res.data.data || res.data;
@@ -65,8 +68,8 @@ export default function Inventory() {
           don_gia: initialPrice,
           ma_partner: defaultPartner || '',
         }));
-      } catch (err) {
-        console.error('Lỗi khi tải dữ liệu danh mục:', err);
+      } catch (err: unknown) {
+        setMasterError(getApiErrorMessage(err, 'Không thể tải dữ liệu danh mục.'));
       } finally {
         setLoadingMaster(false);
       }
@@ -109,7 +112,7 @@ export default function Inventory() {
 
         // Lấy mã chính thức do Server tự động cấp phát (VD: PN_HN01_260918_0001)
         const realCode = res.data.ma_phieu_nhap || res.data.data?.ma_phieu_nhap;
-        setStatus({ type: 'success', text: `✅ Tạo phiếu nhập kho (${realCode}) thành công!` });
+        setStatus({ type: 'success', text: `Đã tạo phiếu nhập kho (${realCode}), đang chờ duyệt.` });
       } else {
         const res = await api.post('/inventory/export', {
           ma_kho: formData.ma_kho,
@@ -119,7 +122,7 @@ export default function Inventory() {
 
         // Lấy mã chính thức do Server tự động cấp phát (VD: PX_HN01_260918_0001)
         const realCode = res.data.ma_phieu_xuat || res.data.data?.ma_phieu_xuat;
-        setStatus({ type: 'success', text: `✅ Tạo phiếu xuất kho (${realCode}) thành công!` });
+        setStatus({ type: 'success', text: `Đã tạo phiếu xuất kho (${realCode}), đang chờ duyệt.` });
       }
 
       // Reset form sau khi tạo thành công
@@ -128,8 +131,8 @@ export default function Inventory() {
         ma_phieu: generateFrontendPreviewCode(isImport, selectedWarehouse),
         so_luong: 1,
       }));
-    } catch (err: any) {
-      setStatus({ type: 'error', text: `❌ Lỗi: ${err.response?.data?.message || err.message}` });
+    } catch (err: unknown) {
+      setStatus({ type: 'error', text: `❌ Lỗi: ${getApiErrorMessage(err, 'Không thể xử lý giao dịch kho')}` });
     }
   };
 
@@ -167,6 +170,15 @@ export default function Inventory() {
             status.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-700' : 'bg-rose-50 border-rose-200 text-rose-700'
           }`}>
             {status.text}
+          </div>
+        )}
+
+        {masterError && (
+          <div className="mb-6 flex items-center justify-between gap-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+            <span>{masterError}</span>
+            <button onClick={() => window.location.reload()} className="font-semibold underline">
+              Thử lại
+            </button>
           </div>
         )}
 

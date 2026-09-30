@@ -1,3 +1,4 @@
+```sql
 -- =========================================================
 -- CENTRAL DATABASE
 -- 02_create_tables.sql
@@ -7,10 +8,13 @@
 --   - Theo dõi trạng thái các node
 --   - Lưu lịch sử đồng bộ
 --   - Lưu kết quả dự báo và đề xuất điều chuyển
+--   - Quản lý kho ảo TRANSIT tại CENTRAL
 --
 -- LƯU Ý:
 --   - sync_log CHỈ tồn tại tại CENTRAL
 --   - node HN / ĐN / HCM chỉ chứa dữ liệu nghiệp vụ
+--   - TRANSIT là kho ảo thuộc CENTRAL
+--   - Không tạo TRANSIT tại các node HN / ĐN / HCM
 -- =========================================================
 
 
@@ -20,16 +24,22 @@
 
 CREATE TABLE IF NOT EXISTS kho (
     ma_kho VARCHAR(10) PRIMARY KEY,
+
     ten_kho VARCHAR(100) NOT NULL,
+
     dia_chi VARCHAR(255),
+
     thanh_pho VARCHAR(100),
 
     -- Node sở hữu dữ liệu kho
     node_name VARCHAR(50) NOT NULL,
 
+    -- Thông tin kết nối tới node
     node_host VARCHAR(100),
+
     node_port INT,
 
+    -- Trạng thái kho
     trang_thai VARCHAR(20) DEFAULT 'ACTIVE',
 
     -- Thời điểm dữ liệu kho được đồng bộ gần nhất
@@ -43,6 +53,7 @@ CREATE TABLE IF NOT EXISTS kho (
 
 CREATE TABLE IF NOT EXISTS nhom_san_pham (
     ma_nhom VARCHAR(10) PRIMARY KEY,
+
     ten_nhom VARCHAR(100) NOT NULL
 );
 
@@ -214,7 +225,7 @@ CREATE TABLE IF NOT EXISTS dieu_chuyen_central (
 -- =========================================================
 -- 9. TRẠNG THÁI NODE
 -- =========================================================
--- Bảng này CHỈ tồn tại tại Central.
+-- Bảng này CHỈ tồn tại tại CENTRAL.
 --
 -- Dùng để theo dõi:
 --   NODE_HN
@@ -244,7 +255,7 @@ CREATE TABLE IF NOT EXISTS node_status (
 -- =========================================================
 -- 10. LỊCH SỬ ĐỒNG BỘ
 -- =========================================================
--- Bảng này CHỈ tồn tại tại Central.
+-- Bảng này CHỈ tồn tại tại CENTRAL.
 --
 -- Không tạo sync_log ở các node nghiệp vụ.
 --
@@ -337,3 +348,55 @@ CREATE TABLE IF NOT EXISTS transfer_recommendation (
 
     status VARCHAR(30) DEFAULT 'PENDING'
 );
+
+
+-- =========================================================
+-- 13. KHO TRANSIT
+-- =========================================================
+-- TRANSIT là kho ảo dùng để biểu diễn hàng đang vận chuyển
+-- giữa các node.
+--
+-- TRANSIT thuộc CENTRAL.
+--
+-- Không tạo TRANSIT tại:
+--   NODE_HN
+--   NODE_DN
+--   NODE_HCM
+--
+-- ON CONFLICT giúp xử lý cả hai trường hợp:
+--   1. Database mới chưa có TRANSIT
+--   2. Database cũ đã có TRANSIT nhưng node_name bị sai
+-- =========================================================
+
+INSERT INTO kho (
+    ma_kho,
+    ten_kho,
+    dia_chi,
+    thanh_pho,
+    node_name,
+    node_host,
+    node_port,
+    trang_thai,
+    dong_bo_luc
+)
+VALUES (
+    'TRANSIT',
+    'Kho hàng đang vận chuyển',
+    NULL,
+    NULL,
+    'CENTRAL',
+    NULL,
+    NULL,
+    'ONLINE',
+    CURRENT_TIMESTAMP
+)
+ON CONFLICT (ma_kho)
+DO UPDATE SET
+    ten_kho = 'Kho hàng đang vận chuyển',
+    node_name = 'CENTRAL',
+    node_host = NULL,
+    node_port = NULL,
+    trang_thai = 'ONLINE',
+    dong_bo_luc = CURRENT_TIMESTAMP;
+
+

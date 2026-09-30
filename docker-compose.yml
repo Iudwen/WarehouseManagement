@@ -26,6 +26,9 @@ services:
       - ./nodes/node_hn/05_insert_hn_data.sql:/docker-entrypoint-initdb.d/05_insert_hn_data.sql:ro
       - ./nodes/node_hn/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
       - ./nodes/node_hn/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+      - ./nodes/node_hn/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
+      - ./nodes/node_hn/09_add_approval_workflow.sql:/docker-entrypoint-initdb.d/09_add_approval_workflow.sql:ro
+      - ./nodes/node_hn/10_align_runtime_schema.sql:/docker-entrypoint-initdb.d/10_align_runtime_schema.sql:ro
 
     healthcheck:
       test:
@@ -67,6 +70,9 @@ services:
       - ./nodes/node_dn/05_insert_dn_data.sql:/docker-entrypoint-initdb.d/05_insert_dn_data.sql:ro
       - ./nodes/node_dn/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
       - ./nodes/node_dn/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+      - ./nodes/node_dn/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
+      - ./nodes/node_dn/09_add_approval_workflow.sql:/docker-entrypoint-initdb.d/09_add_approval_workflow.sql:ro
+      - ./nodes/node_dn/10_align_runtime_schema.sql:/docker-entrypoint-initdb.d/10_align_runtime_schema.sql:ro
 
     healthcheck:
       test:
@@ -108,6 +114,9 @@ services:
       - ./nodes/node_hcm/05_insert_hcm_data.sql:/docker-entrypoint-initdb.d/05_insert_hcm_data.sql:ro
       - ./nodes/node_hcm/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
       - ./nodes/node_hcm/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+      - ./nodes/node_hcm/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
+      - ./nodes/node_hcm/09_add_approval_workflow.sql:/docker-entrypoint-initdb.d/09_add_approval_workflow.sql:ro
+      - ./nodes/node_hcm/10_align_runtime_schema.sql:/docker-entrypoint-initdb.d/10_align_runtime_schema.sql:ro
 
     healthcheck:
       test:
@@ -147,6 +156,10 @@ services:
       - ./data_center/central_database/03_create_constraints.sql:/docker-entrypoint-initdb.d/03_create_constraints.sql:ro
       - ./data_center/central_database/04_create_views.sql:/docker-entrypoint-initdb.d/04_create_views.sql:ro
       - ./data_center/central_database/05_create_indexes.sql:/docker-entrypoint-initdb.d/05_create_indexes.sql:ro
+      - ./data_center/central_database/06_create_saga_monitoring.sql:/docker-entrypoint-initdb.d/06_create_saga_monitoring.sql:ro
+      - ./data_center/central_database/07_saga_procedures.sql:/docker-entrypoint-initdb.d/07_saga_procedures.sql:ro
+      - ./data_center/central_database/08_fix_node_ownership.sql:/docker-entrypoint-initdb.d/08_fix_node_ownership.sql:ro
+      - ./data_center/central_database/09_fix_etl_idempotency.sql:/docker-entrypoint-initdb.d/09_fix_etl_idempotency.sql:ro
 
     healthcheck:
       test:
@@ -198,7 +211,9 @@ services:
 
     networks:
       - warehouse_network
-      # ==========================================================
+
+
+  # ==========================================================
   # SYNC SERVICE
   # ==========================================================
   sync_service:
@@ -224,9 +239,9 @@ services:
       - warehouse_network
 
 
-# ============================================================
+# ==========================================================
 # VOLUMES
-# ============================================================
+# ==========================================================
 
 volumes:
 
@@ -246,9 +261,9 @@ volumes:
     name: warehouse_mongodb_data
 
 
-# ============================================================
+# ==========================================================
 # NETWORK
-# ============================================================
+# ==========================================================
 
 networks:
 

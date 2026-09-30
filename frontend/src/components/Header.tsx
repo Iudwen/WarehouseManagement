@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import { useEffect } from 'react';
 import { Search, Bell, LogOut } from 'lucide-react';
 import { useWarehouse } from '../contexts/WarehouseContext';
 import { useAuth } from '../contexts/AuthContext';

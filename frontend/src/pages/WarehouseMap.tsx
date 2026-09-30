@@ -1,4 +1,3 @@
-import React from 'react';
 
 export default function WarehouseMap() {
   const racks = ['Kệ A', 'Kệ B', 'Kệ C'];
