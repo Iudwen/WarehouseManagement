@@ -15,16 +15,15 @@ export default function Inventory() {
   const [master, setMaster] = useState<MasterData | null>(null);
   const [loadingMaster, setLoadingMaster] = useState<boolean>(true);
   
-  // Hàm sinh mã khớp 100% với quy chuẩn codeGenerator.ts ở Backend
-  const generateFrontendCode = (importing: boolean, kho: string) => {
+  // Hàm tạo chuỗi hiển thị mã giao dịch dự kiến chuẩn 19 ký tự (YYMMDD)
+  const generateFrontendPreviewCode = (importing: boolean, kho: string) => {
     const prefix = importing ? 'PN' : 'PX';
-    const dateStr = new Date().toISOString().slice(0, 10).replace(/-/g, '');
-    const randomSuffix = Math.random().toString(36).substring(2, 6).toUpperCase();
-    return `${prefix}_${kho}_${dateStr}_${randomSuffix}`;
+    const dateStr = new Date().toISOString().slice(2, 10).replace(/-/g, ''); // 260918
+    return `${prefix}_${kho}_${dateStr}_AUTO`;
   };
 
   const [formData, setFormData] = useState({
-    ma_phieu: generateFrontendCode(isImport, selectedWarehouse),
+    ma_phieu: generateFrontendPreviewCode(isImport, selectedWarehouse),
     ma_kho: selectedWarehouse,
     ma_partner: '',
     ma_sp: '',
@@ -34,12 +33,12 @@ export default function Inventory() {
 
   const [status, setStatus] = useState({ type: '', text: '' });
 
-  // 1. Đồng bộ ma_kho và tự sinh mã mới khi đổi Kho hoặc chuyển tab Import/Export
+  // 1. Đồng bộ ma_kho và tự sinh mã preview mới khi đổi Kho hoặc chuyển tab Import/Export
   useEffect(() => {
     setFormData((prev) => ({
       ...prev,
       ma_kho: selectedWarehouse,
-      ma_phieu: generateFrontendCode(isImport, selectedWarehouse),
+      ma_phieu: generateFrontendPreviewCode(isImport, selectedWarehouse),
     }));
   }, [selectedWarehouse, isImport]);
 
@@ -102,27 +101,31 @@ export default function Inventory() {
 
     try {
       if (isImport) {
-        await api.post('/inventory/import', {
-          ma_phieu_nhap: formData.ma_phieu, // Gửi mã đang hiển thị lên Backend
+        const res = await api.post('/inventory/import', {
           ma_kho: formData.ma_kho,
           ma_ncc: formData.ma_partner,
           items: [{ ma_sp: formData.ma_sp, so_luong: Number(formData.so_luong), don_gia: Number(formData.don_gia) }],
         });
-        setStatus({ type: 'success', text: `✅ Tạo phiếu nhập kho (${formData.ma_phieu}) thành công!` });
+
+        // Lấy mã chính thức do Server tự động cấp phát (VD: PN_HN01_260918_0001)
+        const realCode = res.data.ma_phieu_nhap || res.data.data?.ma_phieu_nhap;
+        setStatus({ type: 'success', text: `✅ Tạo phiếu nhập kho (${realCode}) thành công!` });
       } else {
-        await api.post('/inventory/export', {
-          ma_phieu_xuat: formData.ma_phieu, // Gửi mã đang hiển thị lên Backend
+        const res = await api.post('/inventory/export', {
           ma_kho: formData.ma_kho,
           ma_kh: formData.ma_partner,
           items: [{ ma_sp: formData.ma_sp, so_luong: Number(formData.so_luong), don_gia: Number(formData.don_gia) }],
         });
-        setStatus({ type: 'success', text: `✅ Tạo phiếu xuất kho (${formData.ma_phieu}) thành công!` });
+
+        // Lấy mã chính thức do Server tự động cấp phát (VD: PX_HN01_260918_0001)
+        const realCode = res.data.ma_phieu_xuat || res.data.data?.ma_phieu_xuat;
+        setStatus({ type: 'success', text: `✅ Tạo phiếu xuất kho (${realCode}) thành công!` });
       }
 
-      // Sau khi tạo thành công, tự động sinh mã mới cho phiếu tiếp theo
+      // Reset form sau khi tạo thành công
       setFormData((prev) => ({
         ...prev,
-        ma_phieu: generateFrontendCode(isImport, selectedWarehouse),
+        ma_phieu: generateFrontendPreviewCode(isImport, selectedWarehouse),
         so_luong: 1,
       }));
     } catch (err: any) {

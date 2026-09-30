@@ -7,8 +7,9 @@ const api = axios.create({
   },
 });
 
+// Interceptor tự động gán Bearer Token vào Header mọi request
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem('token');
+  const token = localStorage.getItem('wms_token');
   if (token && config.headers) {
     config.headers.Authorization = `Bearer ${token}`;
   }

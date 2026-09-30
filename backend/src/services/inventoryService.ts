@@ -1,12 +1,16 @@
 import { Pool } from 'pg';
 import { ImportPayload, ExportPayload } from '../types';
 import { logInventoryEvent } from './eventLogger';
+import { generateTransactionCode } from '../utils/codeGenerator';
 
 export const processImport = async (pool: Pool, payload: ImportPayload) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { ma_phieu_nhap, ma_kho, ma_ncc, items } = payload;
+    const { ma_kho, ma_ncc, items } = payload;
+
+    // Tự động sinh mã phiếu tự tăng chuẩn WMS nếu client không gửi hoặc gửi mã rỗng
+    const ma_phieu_nhap = payload.ma_phieu_nhap || (await generateTransactionCode(client, 'PN', ma_kho));
 
     // 1. Thêm Phiếu Nhập
     await client.query(
@@ -59,7 +63,10 @@ export const processExport = async (pool: Pool, payload: ExportPayload) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    const { ma_phieu_xuat, ma_kho, ma_kh, items } = payload;
+    const { ma_kho, ma_kh, items } = payload;
+
+    // Tự động sinh mã phiếu tự tăng chuẩn WMS nếu client không gửi hoặc gửi mã rỗng
+    const ma_phieu_xuat = payload.ma_phieu_xuat || (await generateTransactionCode(client, 'PX', ma_kho));
 
     // 1. Kiểm tra số lượng tồn kho thực tế (Lock dòng với FOR UPDATE)
     for (const item of items) {
