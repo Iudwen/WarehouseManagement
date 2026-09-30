@@ -15,7 +15,12 @@ export const handleImport = async (req: CustomRequest, res: Response): Promise<v
     };
 
     const result = await processImport(req.dbPool, payload);
-    res.status(201).json({ message: 'Tạo phiếu nhập kho thành công', data: result });
+
+    res.status(201).json({ 
+      message: 'Tạo phiếu nhập kho thành công', 
+      ma_phieu_nhap: result.ma_phieu_nhap,
+      data: result 
+    });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi xử lý nhập kho' });
   }
@@ -34,7 +39,12 @@ export const handleExport = async (req: CustomRequest, res: Response): Promise<v
     };
 
     const result = await processExport(req.dbPool, payload);
-    res.status(201).json({ message: 'Tạo phiếu xuất kho thành công', data: result });
+
+    res.status(201).json({ 
+      message: 'Tạo phiếu xuất kho thành công', 
+      ma_phieu_xuat: result.ma_phieu_xuat,
+      data: result 
+    });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi xử lý xuất kho' });
   }

@@ -8,29 +8,46 @@ export interface TransferPayload {
   items: Array<{ ma_sp: string; so_luong: number }>;
 }
 
-export const processTransfer = async (payload: TransferPayload) => {
+export const processTransfer = async (payload: TransferPayload, userKho?: string, userRole?: string) => {
   const { ma_phieu_dc, kho_xuat, kho_nhap, items } = payload;
-  
+
+  // 1. Validation Logic
+  if (!items || items.length === 0) {
+    throw new Error('Danh sách hàng hóa điều chuyển không được để rỗng');
+  }
+
+  if (kho_xuat.toUpperCase() === kho_nhap.toUpperCase()) {
+    throw new Error('Kho xuất và Kho nhập không được trùng nhau');
+  }
+
+  // Vá lỗ hổng Security: Kiểm tra quyền sở hữu kho xuất tại Service
+  if (userRole !== 'ADMIN' && userKho && userKho.toUpperCase() !== kho_xuat.toUpperCase()) {
+    throw new Error(`Tài khoản thuộc kho ${userKho}, không có quyền xuất hàng từ kho ${kho_xuat}`);
+  }
+
   const poolExport = getDbPool(kho_xuat);
   const poolImport = getDbPool(kho_nhap);
 
   const clientExport = await poolExport.connect();
   const clientImport = await poolImport.connect();
 
+  let isExportCommitted = false;
+
   try {
-    // Phase 1: Mở Transaction TRÊN CẢ 2 NODE cùng lúc
+    // Phase 1: Mở Transaction trên cả 2 Node
     await clientExport.query('BEGIN');
     await clientImport.query('BEGIN');
 
-    // 1. Kiểm tra & Trừ kho tại Node Xuất (Lock dòng với FOR UPDATE)
+    // Trừ kho tại Node Xuất (Lock dòng bằng FOR UPDATE)
     for (const item of items) {
       const res = await clientExport.query(
         `SELECT so_luong FROM ton_kho WHERE ma_kho = $1 AND ma_sp = $2 FOR UPDATE`,
         [kho_xuat, item.ma_sp]
       );
+      
       const currentStock = res.rows[0]?.so_luong || 0;
       if (currentStock < item.so_luong) {
-        throw new Error(`Kho xuất ${kho_xuat} không đủ hàng ${item.ma_sp} (Hiện có: ${currentStock})`);
+        throw new Error(`Kho xuất ${kho_xuat} không đủ sản phẩm ${item.ma_sp} (Tồn hiện tại: ${currentStock})`);
       }
 
       await clientExport.query(
@@ -48,6 +65,7 @@ export const processTransfer = async (payload: TransferPayload) => {
       );
     }
 
+    // Ghi nhận chứng từ phiếu điều chuyển tại Node Xuất
     await clientExport.query(
       `INSERT INTO phieu_dieu_chuyen (ma_phieu_dc, kho_xuat, kho_nhap, ngay_dieu_chuyen, trang_thai)
        VALUES ($1, $2, $3, NOW(), 'COMPLETED')`,
@@ -61,7 +79,7 @@ export const processTransfer = async (payload: TransferPayload) => {
       );
     }
 
-    // 2. Cộng kho tại Node Nhập
+    // Cộng kho tại Node Nhập
     for (const item of items) {
       await clientImport.query(
         `INSERT INTO ton_kho (ma_kho, ma_sp, so_luong, cap_nhat_luc)
@@ -80,18 +98,29 @@ export const processTransfer = async (payload: TransferPayload) => {
       );
     }
 
-    // Phase 2: Cả 2 Node OK mới tiến hành COMMIT
-    await clientExport.query('COMMIT');
+    // Phase 2: An toàn 2PC - COMMIT Node Nhập trước, Node Xuất sau
     await clientImport.query('COMMIT');
+    
+    try {
+      await clientExport.query('COMMIT');
+      isExportCommitted = true;
+    } catch (exportCommitErr) {
+      // Trường hợp hiếm: Node Nhập đã Commit nhưng Node Xuất sập mạng lúc Commit
+      console.error('CRITICAL: Node Nhập đã Commit nhưng Node Xuất thất bại!', exportCommitErr);
+      throw new Error('Lỗi đồng bộ nghiêm trọng giữa các chi nhánh. Cần kiểm tra log thủ công.');
+    }
 
-    // 3. Đẩy Event log sang Mongo
+    // Ghi Log lịch sử ra MongoDB
     logTransferEvent({ ma_phieu_dc, kho_xuat, kho_nhap, items });
 
     return { success: true, ma_phieu_dc };
+
   } catch (error) {
-    // Nếu có bất kỳ lỗi nào, ROLLBACK CẢ 2 NODE an toàn 100%
-    await clientExport.query('ROLLBACK');
-    await clientImport.query('ROLLBACK');
+    // Chỉ ROLLBACK Node Xuất nếu nó chưa COMMIT thành công
+    if (!isExportCommitted) {
+      await clientExport.query('ROLLBACK').catch(() => {});
+    }
+    await clientImport.query('ROLLBACK').catch(() => {});
     throw error;
   } finally {
     clientExport.release();
