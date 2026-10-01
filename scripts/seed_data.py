@@ -6,6 +6,32 @@ import psycopg
 
 
 # =========================================================
+# SEED DATA - CÁC NODE HN / DN / HCM
+# =========================================================
+# File này CHỈ seed dữ liệu nghiệp vụ tại các NODE.
+# Không seed NGUOI_DUNG / role tại đây.
+# Dữ liệu tài khoản tập trung tại CENTRAL/07_seed_data.sql.
+#
+# Node được seed:
+#   - NODE_HN  -> warehouse_hn  -> localhost:5433
+#   - NODE_DN  -> warehouse_dn  -> localhost:5434
+#   - NODE_HCM -> warehouse_hcm -> localhost:5435
+#
+# Dữ liệu được sinh:
+#   - KHO
+#   - NHOM_SAN_PHAM
+#   - SAN_PHAM
+#   - NHA_CUNG_CAP
+#   - KHACH_HANG
+#   - PHIEU_NHAP / CT_PHIEU_NHAP
+#   - PHIEU_XUAT / CT_PHIEU_XUAT
+#   - TON_KHO
+#   - STOCK_LEDGER
+#   - LICH_SU_TON_KHO
+# =========================================================
+
+
+# =========================================================
 # CẤU HÌNH
 # =========================================================
 

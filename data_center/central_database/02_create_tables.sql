@@ -1,20 +1,52 @@
-```sql
 -- =========================================================
 -- CENTRAL DATABASE
 -- 02_create_tables.sql
 -- =========================================================
+--
 -- Mục đích:
 --   - Lưu dữ liệu tổng hợp từ các node HN / ĐN / HCM
+--   - Quản lý tài khoản và phân quyền tập trung
 --   - Theo dõi trạng thái các node
 --   - Lưu lịch sử đồng bộ
 --   - Lưu kết quả dự báo và đề xuất điều chuyển
+--   - Quản lý điều chuyển liên chi nhánh
 --   - Quản lý kho ảo TRANSIT tại CENTRAL
 --
--- LƯU Ý:
---   - sync_log CHỈ tồn tại tại CENTRAL
---   - node HN / ĐN / HCM chỉ chứa dữ liệu nghiệp vụ
---   - TRANSIT là kho ảo thuộc CENTRAL
---   - Không tạo TRANSIT tại các node HN / ĐN / HCM
+-- =========================================================
+-- ROLE HỆ THỐNG
+-- =========================================================
+--
+--   ADMIN
+--       Quản trị toàn bộ hệ thống.
+--
+--   QUAN_LY_KHO
+--       Quản lý nghiệp vụ của kho được phân công.
+--
+--   NHAN_VIEN_KHO
+--       Thực hiện nghiệp vụ nhập, xuất, kiểm kê, nhận hàng.
+--
+--   DIEU_PHOI
+--       Điều phối và theo dõi điều chuyển giữa các kho.
+--
+--   DATA_ANALYST
+--       Phân tích dữ liệu, dự báo và đề xuất điều chuyển.
+--
+-- =========================================================
+-- LƯU Ý
+-- =========================================================
+--
+--   - NGUOI_DUNG chỉ tồn tại tại CENTRAL.
+--   - Không tạo NGUOI_DUNG riêng tại các NODE.
+--   - Tài khoản được quản lý tập trung tại CENTRAL.
+--   - QUAN_LY_KHO và NHAN_VIEN_KHO phải gắn với một kho.
+--   - ADMIN / DIEU_PHOI / DATA_ANALYST không gắn với kho.
+--
+--   - sync_log CHỈ tồn tại tại CENTRAL.
+--   - node HN / ĐN / HCM chỉ chứa dữ liệu nghiệp vụ.
+--   - TRANSIT là kho ảo thuộc CENTRAL.
+--   - Không tạo TRANSIT tại các node.
+--   - Không tạo FK xuyên database.
+--
 -- =========================================================
 
 
@@ -48,7 +80,154 @@ CREATE TABLE IF NOT EXISTS kho (
 
 
 -- =========================================================
--- 2. NHÓM SẢN PHẨM
+-- 2. NGƯỜI DÙNG
+-- =========================================================
+--
+-- Quản lý tập trung tại CENTRAL.
+--
+-- Role:
+--   ADMIN
+--   QUAN_LY_KHO
+--   NHAN_VIEN_KHO
+--   DIEU_PHOI
+--   DATA_ANALYST
+--
+-- Quy tắc ma_kho:
+--
+--   ADMIN
+--       -> ma_kho = NULL
+--
+--   QUAN_LY_KHO
+--       -> phải có ma_kho
+--
+--   NHAN_VIEN_KHO
+--       -> phải có ma_kho
+--
+--   DIEU_PHOI
+--       -> ma_kho = NULL
+--
+--   DATA_ANALYST
+--       -> ma_kho = NULL
+--
+-- =========================================================
+
+CREATE TABLE IF NOT EXISTS nguoi_dung (
+    ma_nguoi_dung BIGSERIAL PRIMARY KEY,
+
+    -- Tên đăng nhập
+    ten_dang_nhap VARCHAR(50) NOT NULL UNIQUE,
+
+    -- Mật khẩu đã được hash
+    mat_khau VARCHAR(255) NOT NULL,
+
+    -- Họ và tên
+    ho_ten VARCHAR(100) NOT NULL,
+
+    -- Email
+    email VARCHAR(100),
+
+    -- Số điện thoại
+    so_dien_thoai VARCHAR(20),
+
+    -- Vai trò người dùng
+    vai_tro VARCHAR(30) NOT NULL,
+
+    -- Kho phụ trách
+    -- NULL đối với ADMIN / DIEU_PHOI / DATA_ANALYST
+    ma_kho VARCHAR(10),
+
+    -- Trạng thái tài khoản
+    trang_thai VARCHAR(20) NOT NULL
+        DEFAULT 'ACTIVE',
+
+    created_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    updated_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+
+    -- =====================================================
+    -- CONSTRAINT - VAI TRÒ
+    -- =====================================================
+
+    CONSTRAINT chk_nguoi_dung_vai_tro
+        CHECK (
+            vai_tro IN (
+                'ADMIN',
+                'QUAN_LY_KHO',
+                'NHAN_VIEN_KHO',
+                'DIEU_PHOI',
+                'DATA_ANALYST'
+            )
+        ),
+
+
+    -- =====================================================
+    -- CONSTRAINT - TRẠNG THÁI
+    -- =====================================================
+
+    CONSTRAINT chk_nguoi_dung_trang_thai
+        CHECK (
+            trang_thai IN (
+                'ACTIVE',
+                'LOCKED',
+                'INACTIVE'
+            )
+        ),
+
+
+    -- =====================================================
+    -- CONSTRAINT - ROLE VÀ KHO
+    -- =====================================================
+
+    CONSTRAINT chk_nguoi_dung_role_kho
+        CHECK (
+            (
+                vai_tro IN (
+                    'QUAN_LY_KHO',
+                    'NHAN_VIEN_KHO'
+                )
+                AND ma_kho IS NOT NULL
+            )
+            OR
+            (
+                vai_tro IN (
+                    'ADMIN',
+                    'DIEU_PHOI',
+                    'DATA_ANALYST'
+                )
+                AND ma_kho IS NULL
+            )
+        ),
+
+
+    -- =====================================================
+    -- FOREIGN KEY
+    -- =====================================================
+
+    CONSTRAINT fk_nguoi_dung_kho
+        FOREIGN KEY (ma_kho)
+        REFERENCES kho(ma_kho)
+);
+
+
+-- =========================================================
+-- INDEX - NGƯỜI DÙNG
+-- =========================================================
+
+CREATE INDEX IF NOT EXISTS idx_nguoi_dung_vai_tro
+ON nguoi_dung(vai_tro);
+
+CREATE INDEX IF NOT EXISTS idx_nguoi_dung_ma_kho
+ON nguoi_dung(ma_kho);
+
+CREATE INDEX IF NOT EXISTS idx_nguoi_dung_trang_thai
+ON nguoi_dung(trang_thai);
+
+
+-- =========================================================
+-- 3. NHÓM SẢN PHẨM
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS nhom_san_pham (
@@ -59,7 +238,7 @@ CREATE TABLE IF NOT EXISTS nhom_san_pham (
 
 
 -- =========================================================
--- 3. SẢN PHẨM
+-- 4. SẢN PHẨM
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS san_pham (
@@ -84,14 +263,19 @@ CREATE TABLE IF NOT EXISTS san_pham (
 
 
 -- =========================================================
--- 4. TỒN KHO TỔNG HỢP
+-- 5. TỒN KHO TỔNG HỢP
 -- =========================================================
--- Tổng hợp tồn kho từ các node:
+--
+-- Tổng hợp tồn kho từ:
 --   NODE_HN
 --   NODE_DN
 --   NODE_HCM
 --
 -- Mỗi cặp (ma_kho, ma_sp) chỉ có một bản ghi.
+--
+-- CENTRAL chỉ lưu dữ liệu tổng hợp.
+-- Không trực tiếp thay đổi TON_KHO tại NODE.
+--
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS ton_kho_central (
@@ -101,7 +285,8 @@ CREATE TABLE IF NOT EXISTS ton_kho_central (
 
     so_luong INT NOT NULL DEFAULT 0,
 
-    cap_nhat_luc TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    cap_nhat_luc TIMESTAMP
+        DEFAULT CURRENT_TIMESTAMP,
 
     -- Node nguồn dữ liệu
     source_node VARCHAR(50),
@@ -111,7 +296,7 @@ CREATE TABLE IF NOT EXISTS ton_kho_central (
 
 
 -- =========================================================
--- 5. LỊCH SỬ TỒN KHO
+-- 6. LỊCH SỬ TỒN KHO
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS lich_su_ton_kho_central (
@@ -137,12 +322,13 @@ CREATE TABLE IF NOT EXISTS lich_su_ton_kho_central (
 
     source_node VARCHAR(50),
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP
+        DEFAULT CURRENT_TIMESTAMP
 );
 
 
 -- =========================================================
--- 6. BÁN HÀNG TỔNG HỢP
+-- 7. BÁN HÀNG TỔNG HỢP
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS ban_hang_central (
@@ -164,12 +350,13 @@ CREATE TABLE IF NOT EXISTS ban_hang_central (
 
     source_node VARCHAR(50),
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP
+        DEFAULT CURRENT_TIMESTAMP
 );
 
 
 -- =========================================================
--- 7. NHẬP HÀNG TỔNG HỢP
+-- 8. NHẬP HÀNG TỔNG HỢP
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS nhap_hang_central (
@@ -191,12 +378,13 @@ CREATE TABLE IF NOT EXISTS nhap_hang_central (
 
     source_node VARCHAR(50),
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP
+        DEFAULT CURRENT_TIMESTAMP
 );
 
 
 -- =========================================================
--- 8. ĐIỀU CHUYỂN TỔNG HỢP
+-- 9. ĐIỀU CHUYỂN TỔNG HỢP
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS dieu_chuyen_central (
@@ -218,19 +406,22 @@ CREATE TABLE IF NOT EXISTS dieu_chuyen_central (
 
     source_node VARCHAR(50),
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP
+        DEFAULT CURRENT_TIMESTAMP
 );
 
 
 -- =========================================================
--- 9. TRẠNG THÁI NODE
+-- 10. TRẠNG THÁI NODE
 -- =========================================================
+--
 -- Bảng này CHỈ tồn tại tại CENTRAL.
 --
--- Dùng để theo dõi:
+-- Theo dõi:
 --   NODE_HN
 --   NODE_DN
 --   NODE_HCM
+--
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS node_status (
@@ -253,13 +444,13 @@ CREATE TABLE IF NOT EXISTS node_status (
 
 
 -- =========================================================
--- 10. LỊCH SỬ ĐỒNG BỘ
+-- 11. LỊCH SỬ ĐỒNG BỘ
 -- =========================================================
+--
 -- Bảng này CHỈ tồn tại tại CENTRAL.
 --
--- Không tạo sync_log ở các node nghiệp vụ.
+-- Cấu trúc khớp với sync_service.py:
 --
--- Cấu trúc phải khớp với sync_service.py:
 --   node_name
 --   sync_type
 --   started_at
@@ -269,6 +460,7 @@ CREATE TABLE IF NOT EXISTS node_status (
 --   records_failed
 --   status
 --   error_message
+--
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS sync_log (
@@ -295,9 +487,11 @@ CREATE TABLE IF NOT EXISTS sync_log (
 
 
 -- =========================================================
--- 11. KẾT QUẢ DỰ BÁO NHU CẦU
+-- 12. KẾT QUẢ DỰ BÁO NHU CẦU
 -- =========================================================
+--
 -- Dữ liệu được tạo bởi Data Mining / Machine Learning.
+--
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS demand_forecast (
@@ -313,14 +507,21 @@ CREATE TABLE IF NOT EXISTS demand_forecast (
 
     model_name VARCHAR(100),
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    created_at TIMESTAMP
+        DEFAULT CURRENT_TIMESTAMP
 );
 
 
 -- =========================================================
--- 12. ĐỀ XUẤT ĐIỀU CHUYỂN
+-- 13. ĐỀ XUẤT ĐIỀU CHUYỂN
 -- =========================================================
+--
 -- Kết quả phân tích tồn kho + dự báo nhu cầu.
+--
+-- Data Analyst / Data Mining tạo đề xuất.
+-- Quản lý / Admin phê duyệt.
+-- Sau khi phê duyệt mới tạo phiếu điều chuyển chính thức.
+--
 -- =========================================================
 
 CREATE TABLE IF NOT EXISTS transfer_recommendation (
@@ -344,15 +545,18 @@ CREATE TABLE IF NOT EXISTS transfer_recommendation (
 
     model_name VARCHAR(100),
 
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    created_at TIMESTAMP
+        DEFAULT CURRENT_TIMESTAMP,
 
-    status VARCHAR(30) DEFAULT 'PENDING'
+    status VARCHAR(30)
+        DEFAULT 'PENDING'
 );
 
 
 -- =========================================================
--- 13. KHO TRANSIT
+-- 14. KHO TRANSIT
 -- =========================================================
+--
 -- TRANSIT là kho ảo dùng để biểu diễn hàng đang vận chuyển
 -- giữa các node.
 --
@@ -363,9 +567,10 @@ CREATE TABLE IF NOT EXISTS transfer_recommendation (
 --   NODE_DN
 --   NODE_HCM
 --
--- ON CONFLICT giúp xử lý cả hai trường hợp:
+-- ON CONFLICT xử lý:
 --   1. Database mới chưa có TRANSIT
---   2. Database cũ đã có TRANSIT nhưng node_name bị sai
+--   2. Database cũ đã có TRANSIT nhưng thông tin sai
+--
 -- =========================================================
 
 INSERT INTO kho (
@@ -400,3 +605,22 @@ DO UPDATE SET
     dong_bo_luc = CURRENT_TIMESTAMP;
 
 
+-- =========================================================
+-- 15. DỮ LIỆU KHO MẶC ĐỊNH
+-- =========================================================
+--
+-- Phần này có thể dùng khi CENTRAL được khởi tạo mới.
+--
+-- Nếu dữ liệu KHO đã được sync từ các NODE thì có thể bỏ qua.
+--
+-- =========================================================
+
+-- Ví dụ:
+--
+-- INSERT INTO kho (...)
+-- VALUES (...);
+
+
+-- =========================================================
+-- KẾT THÚC 02_create_tables.sql
+-- =========================================================
