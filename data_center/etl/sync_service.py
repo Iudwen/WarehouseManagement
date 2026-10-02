@@ -1,14 +1,15 @@
 import psycopg
 import time
+import os
 from datetime import datetime
-
 
 # ============================================================
 # CẤU HÌNH
 # ============================================================
 
-DB_USER = "admin"
-DB_PASSWORD = "admin123"
+DB_USER = os.getenv("DB_USER", "admin")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
 
 # Đồng bộ mỗi 5 phút
 SYNC_INTERVAL = 300

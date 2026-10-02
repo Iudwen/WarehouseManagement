@@ -1,10 +1,36 @@
 import { pools } from '../config/postgresql';
+import { UserPayload } from '../types';
+import {
+  AcceptTransferCommand,
+  acceptTransferAtNode,
+} from './nodeTransferProcedureAdapter';
 
 export interface TransferPayload {
   ma_phieu_dc: string;
   kho_xuat: string;
   kho_nhap: string;
   items: Array<{ ma_sp: string; so_luong: number }>;
+}
+
+export interface SagaTransferContext {
+  saga_id: string;
+  global_id: string | null;
+  ma_phieu_dc: string;
+  kho_xuat: string;
+  ma_sp: string;
+  so_luong_yeu_cau: number;
+  current_state: string;
+  status: string;
+}
+
+type SourceConfirmationActor = Pick<
+  UserPayload,
+  'ma_nguoi_dung' | 'vai_tro' | 'ma_kho'
+>;
+
+export interface SourceConfirmationDependencies {
+  loadSagaContext: (maPhieuDc: string) => Promise<SagaTransferContext | null>;
+  acceptTransfer: (command: AcceptTransferCommand) => Promise<void>;
 }
 
 const nodeByWarehouse: Record<string, string> = {
@@ -123,4 +149,83 @@ export const approveTransfer = async (maPhieuDc: string) => {
   } finally {
     client.release();
   }
+};
+
+const loadSagaContext = async (maPhieuDc: string): Promise<SagaTransferContext | null> => {
+  const result = await pools.CENTRAL.query(
+    `SELECT
+       saga_id,
+       ma_giao_dich_global AS global_id,
+       ma_phieu_dc,
+       kho_xuat,
+       ma_sp,
+       so_luong_yeu_cau,
+       current_state,
+       status
+     FROM saga_transaction
+     WHERE ma_phieu_dc = $1`,
+    [maPhieuDc],
+  );
+
+  return result.rows[0] || null;
+};
+
+const defaultSourceConfirmationDependencies: SourceConfirmationDependencies = {
+  loadSagaContext,
+  acceptTransfer: acceptTransferAtNode,
+};
+
+export const confirmSourceTransfer = async (
+  maPhieuDc: string,
+  actor: SourceConfirmationActor,
+  dependencies: SourceConfirmationDependencies = defaultSourceConfirmationDependencies,
+) => {
+  const sagaContext = await dependencies.loadSagaContext(maPhieuDc);
+
+  if (!sagaContext) {
+    throw new Error(`Không tìm thấy Saga cho phiếu ${maPhieuDc}`);
+  }
+
+  if (!sagaContext.global_id) {
+    throw new Error(`Saga của phiếu ${maPhieuDc} thiếu ma_giao_dich_global`);
+  }
+
+  if (sagaContext.status !== 'RUNNING') {
+    throw new Error(`Saga đang ở trạng thái ${sagaContext.status}, không thể xác nhận kho nguồn`);
+  }
+
+  if (sagaContext.current_state !== 'WAITING_SOURCE_CONFIRMATION') {
+    throw new Error(
+      `Saga đang ở state ${sagaContext.current_state}, không thể xác nhận kho nguồn`,
+    );
+  }
+
+  if (
+    actor.vai_tro !== 'ADMIN' &&
+    (!actor.ma_kho || actor.ma_kho.toUpperCase() !== sagaContext.kho_xuat.toUpperCase())
+  ) {
+    throw new Error(
+      `Tài khoản thuộc kho ${actor.ma_kho}, không có quyền xác nhận kho nguồn ${sagaContext.kho_xuat}`,
+    );
+  }
+
+  const command: AcceptTransferCommand = {
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    ma_kho: sagaContext.kho_xuat,
+    ma_sp: sagaContext.ma_sp,
+    so_luong: sagaContext.so_luong_yeu_cau,
+  };
+
+  await dependencies.acceptTransfer(command);
+
+  return {
+    success: true,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_kho: sagaContext.kho_xuat,
+    event_type: 'TRANSFER_ACCEPTED',
+  };
 };

@@ -2,6 +2,7 @@ import { Pool } from 'pg';
 import { ExportPayload, ImportPayload, UserPayload } from '../types';
 import { logInventoryEvent } from './eventLogger';
 import { generateTransactionCode } from '../utils/codeGenerator';
+import { appendOutboxEvent } from '../messaging/messageBoundary';
 
 type InventoryActor = Pick<UserPayload, 'ma_nguoi_dung' | 'vai_tro'>;
 
@@ -69,6 +70,17 @@ export const processImport = async (
     }
 
     await addWorkflowHistory(client, 'NHAP', maPhieuNhap, null, 'PENDING_APPROVAL', actor.ma_nguoi_dung);
+    await appendOutboxEvent(client, {
+      messageType: 'INVENTORY_IMPORT_REQUESTED',
+      aggregateId: maPhieuNhap,
+      payload: {
+        ma_phieu_nhap: maPhieuNhap,
+        ma_kho: payload.ma_kho,
+        ma_ncc: payload.ma_ncc,
+        items: payload.items,
+        nguoi_tao: actor.ma_nguoi_dung,
+      },
+    });
     await client.query('COMMIT');
     return { success: true, ma_phieu_nhap: maPhieuNhap, trang_thai: 'PENDING_APPROVAL' };
   } catch (error) {
@@ -107,6 +119,17 @@ export const processExport = async (
     }
 
     await addWorkflowHistory(client, 'XUAT', maPhieuXuat, null, 'PENDING_APPROVAL', actor.ma_nguoi_dung);
+    await appendOutboxEvent(client, {
+      messageType: 'INVENTORY_EXPORT_REQUESTED',
+      aggregateId: maPhieuXuat,
+      payload: {
+        ma_phieu_xuat: maPhieuXuat,
+        ma_kho: payload.ma_kho,
+        ma_kh: payload.ma_kh,
+        items: payload.items,
+        nguoi_tao: actor.ma_nguoi_dung,
+      },
+    });
     await client.query('COMMIT');
     return { success: true, ma_phieu_xuat: maPhieuXuat, trang_thai: 'PENDING_APPROVAL' };
   } catch (error) {
@@ -174,6 +197,16 @@ export const approveImport = async (pool: Pool, maPhieuNhap: string, actor: Inve
       [actor.ma_nguoi_dung, maPhieuNhap, document.version],
     );
     await addWorkflowHistory(client, 'NHAP', maPhieuNhap, 'PENDING_APPROVAL', 'COMPLETED', actor.ma_nguoi_dung);
+    await appendOutboxEvent(client, {
+      messageType: 'INVENTORY_IMPORT_COMPLETED',
+      aggregateId: maPhieuNhap,
+      payload: {
+        ma_phieu_nhap: maPhieuNhap,
+        ma_kho: document.ma_kho,
+        items: items.rows,
+        nguoi_duyet: actor.ma_nguoi_dung,
+      },
+    });
     await client.query('COMMIT');
 
     await logInventoryEvent({ type: 'IMPORT', ma_kho: document.ma_kho, ma_phieu: maPhieuNhap, items: items.rows });
@@ -227,6 +260,16 @@ export const approveExport = async (pool: Pool, maPhieuXuat: string, actor: Inve
       [actor.ma_nguoi_dung, maPhieuXuat, document.version],
     );
     await addWorkflowHistory(client, 'XUAT', maPhieuXuat, 'PENDING_APPROVAL', 'COMPLETED', actor.ma_nguoi_dung);
+    await appendOutboxEvent(client, {
+      messageType: 'INVENTORY_EXPORT_COMPLETED',
+      aggregateId: maPhieuXuat,
+      payload: {
+        ma_phieu_xuat: maPhieuXuat,
+        ma_kho: document.ma_kho,
+        items: items.rows,
+        nguoi_duyet: actor.ma_nguoi_dung,
+      },
+    });
     await client.query('COMMIT');
 
     await logInventoryEvent({ type: 'EXPORT', ma_kho: document.ma_kho, ma_phieu: maPhieuXuat, items: items.rows });
@@ -260,6 +303,16 @@ const rejectWorkflowDocument = async (
       [actor.ma_nguoi_dung, reason, id, document.version],
     );
     await addWorkflowHistory(client, loaiPhieu, id, 'PENDING_APPROVAL', 'REJECTED', actor.ma_nguoi_dung, reason);
+    await appendOutboxEvent(client, {
+      messageType: loaiPhieu === 'NHAP' ? 'INVENTORY_IMPORT_REJECTED' : 'INVENTORY_EXPORT_REJECTED',
+      aggregateId: id,
+      payload: {
+        ma_phieu: id,
+        loai_phieu: loaiPhieu,
+        ly_do: reason,
+        nguoi_duyet: actor.ma_nguoi_dung,
+      },
+    });
     await client.query('COMMIT');
     return { success: true, ma_phieu: id, trang_thai: 'REJECTED' };
   } catch (error) {

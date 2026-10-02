@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/app.js",
-    "dev": "ts-node-dev --respawn --transpile-only --exit-child src/app.ts"
+    "dev": "ts-node-dev --respawn --transpile-only --exit-child src/app.ts",
+    "test": "npm run build && node --test dist/messaging/outboxRelay.test.js dist/messaging/localMessageDispatcher.test.js dist/services/nodeTransferProcedureAdapter.test.js dist/services/transferService.test.js dist/services/centralTransferEventHandler.test.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
