@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   handleApproveTransfer,
   handleSourceConfirmation,
+  handleSourceShipment,
   handleTransfer,
 } from '../controllers/transferController';
 import { verifyToken, branchGuard, verifyRole } from '../middlewares/auth';
@@ -36,4 +37,14 @@ router.post(
   verifyRole(['ADMIN', 'MANAGER']),
   handleSourceConfirmation
 );
+
+router.post(
+  '/:maPhieu/source-ship',
+  verifyToken,
+  dbSelector,
+  branchGuard,
+  verifyRole(['ADMIN', 'MANAGER']),
+  handleSourceShipment
+);
+
 export default router;

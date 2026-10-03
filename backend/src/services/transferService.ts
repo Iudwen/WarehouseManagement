@@ -2,7 +2,9 @@ import { pools } from '../config/postgresql';
 import { UserPayload } from '../types';
 import {
   AcceptTransferCommand,
+  ShipTransferCommand,
   acceptTransferAtNode,
+  shipTransferAtNode,
 } from './nodeTransferProcedureAdapter';
 
 export interface TransferPayload {
@@ -29,11 +31,21 @@ type SourceConfirmationActor = Pick<
 >;
 
 export interface SourceConfirmationDependencies {
-  loadSagaContext: (maPhieuDc: string) => Promise<SagaTransferContext | null>;
-  acceptTransfer: (command: AcceptTransferCommand) => Promise<void>;
+  loadSagaContext: (maPhieuDc: string) => Promise;
+  acceptTransfer: (command: AcceptTransferCommand) => Promise;
 }
 
-const nodeByWarehouse: Record<string, string> = {
+type SourceShipmentActor = Pick<
+  UserPayload,
+  'ma_nguoi_dung' | 'vai_tro' | 'ma_kho'
+>;
+
+export interface SourceShipmentDependencies {
+  loadSagaContext: (maPhieuDc: string) => Promise;
+  shipTransfer: (command: ShipTransferCommand) => Promise;
+}
+
+const nodeByWarehouse: Record = {
   HN01: 'NODE_HN',
   DN01: 'NODE_DN',
   HCM01: 'NODE_HCM',
@@ -65,7 +77,7 @@ const validateTransfer = (payload: TransferPayload, userKho?: string, userRole?:
   }
 
   if (userRole !== 'ADMIN' && userKho?.toUpperCase() !== normalizedSource) {
-    throw new Error(`Tài khoản thuộc kho ${userKho}, không có quyền xuất hàng từ kho ${normalizedSource}`);
+    throw new Error(`Tài khoản thuộc kho \({userKho}, không có quyền xuất hàng từ kho\){normalizedSource}`);
   }
 };
 
@@ -151,7 +163,7 @@ export const approveTransfer = async (maPhieuDc: string) => {
   }
 };
 
-const loadSagaContext = async (maPhieuDc: string): Promise<SagaTransferContext | null> => {
+const loadSagaContext = async (maPhieuDc: string): Promise => {
   const result = await pools.CENTRAL.query(
     `SELECT
        saga_id,
@@ -205,7 +217,7 @@ export const confirmSourceTransfer = async (
     (!actor.ma_kho || actor.ma_kho.toUpperCase() !== sagaContext.kho_xuat.toUpperCase())
   ) {
     throw new Error(
-      `Tài khoản thuộc kho ${actor.ma_kho}, không có quyền xác nhận kho nguồn ${sagaContext.kho_xuat}`,
+      `Tài khoản thuộc kho \({actor.ma_kho}, không có quyền xác nhận kho nguồn\){sagaContext.kho_xuat}`,
     );
   }
 
@@ -227,5 +239,68 @@ export const confirmSourceTransfer = async (
     global_id: sagaContext.global_id,
     ma_kho: sagaContext.kho_xuat,
     event_type: 'TRANSFER_ACCEPTED',
+  };
+};
+
+const defaultSourceShipmentDependencies: SourceShipmentDependencies = {
+  loadSagaContext,
+  shipTransfer: shipTransferAtNode,
+};
+
+/**
+ * Task 3.5: Lệnh xuất hàng tại kho nguồn (Source Shipment)
+ */
+export const shipSourceTransfer = async (
+  maPhieuDc: string,
+  actor: SourceShipmentActor,
+  dependencies: SourceShipmentDependencies = defaultSourceShipmentDependencies,
+) => {
+  const sagaContext = await dependencies.loadSagaContext(maPhieuDc);
+
+  if (!sagaContext) {
+    throw new Error(`Không tìm thấy Saga cho phiếu ${maPhieuDc}`);
+  }
+
+  if (!sagaContext.global_id) {
+    throw new Error(`Saga của phiếu ${maPhieuDc} thiếu ma_giao_dich_global`);
+  }
+
+  if (sagaContext.status !== 'RUNNING') {
+    throw new Error(`Saga đang ở trạng thái ${sagaContext.status}, không thể thực hiện xuất hàng`);
+  }
+
+  if (sagaContext.current_state !== 'SOURCE_ACCEPTED') {
+    throw new Error(
+      `Saga đang ở state ${sagaContext.current_state}, không thể thực hiện xuất hàng`,
+    );
+  }
+
+  if (
+    actor.vai_tro !== 'ADMIN' &&
+    (!actor.ma_kho || actor.ma_kho.toUpperCase() !== sagaContext.kho_xuat.toUpperCase())
+  ) {
+    throw new Error(
+      `Tài khoản thuộc kho \({actor.ma_kho}, không có quyền xuất hàng từ kho nguồn\){sagaContext.kho_xuat}`,
+    );
+  }
+
+  const command: ShipTransferCommand = {
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    ma_kho: sagaContext.kho_xuat,
+    ma_sp: sagaContext.ma_sp,
+    so_luong: sagaContext.so_luong_yeu_cau,
+  };
+
+  await dependencies.shipTransfer(command);
+
+  return {
+    success: true,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_kho: sagaContext.kho_xuat,
+    event_type: 'TRANSFER_SHIPPED',
   };
 };
