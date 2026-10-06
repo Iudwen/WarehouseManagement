@@ -12,6 +12,10 @@ DB_PASSWORD = "admin123"
 
 SYNC_INTERVAL = 300
 
+WAIT_RETRY_INTERVAL = 10
+
+COMPENSATION_RETRY_INTERVAL = 10
+
 
 # ============================================================
 # CÁC NODE POSTGRESQL
@@ -56,7 +60,23 @@ CENTRAL = {
 # KẾT NỐI DATABASE
 # ============================================================
 
+def connect_database(config):
+
+    return psycopg.connect(
+        host=config["host"],
+        port=config["port"],
+        dbname=config["database"],
+        user=DB_USER,
+        password=DB_PASSWORD
+    )
+
+
+# ============================================================
+# ĐẢM BẢO SCHEMA CENTRAL
+# ============================================================
+
 def ensure_central_schema(central_conn):
+
     sql = """
     CREATE TABLE IF NOT EXISTS xuat_hang_central (
         id BIGSERIAL PRIMARY KEY,
@@ -84,17 +104,6 @@ def ensure_central_schema(central_conn):
         cursor.execute(sql)
 
     central_conn.commit()
-
-
-def connect_database(config):
-
-    return psycopg.connect(
-        host=config["host"],
-        port=config["port"],
-        dbname=config["database"],
-        user=DB_USER,
-        password=DB_PASSWORD
-    )
 
 
 # ============================================================
@@ -229,7 +238,7 @@ def get_outbound_shipments(node_conn):
 
 
 # ============================================================
-# 6. LẤY DỮ LIỆU ĐIỀU CHUYỂN TỪ CENTRAL
+# 6. LẤY PHIẾU ĐIỀU CHUYỂN TỪ CENTRAL
 # ============================================================
 
 def get_pending_transfers(central_conn):
@@ -262,7 +271,126 @@ def get_pending_transfers(central_conn):
 
 
 # ============================================================
-# 7. ĐỒNG BỘ BẢNG KHO
+# 7. LẤY WAITING TRANSACTION
+# ============================================================
+
+def get_waiting_transactions(node_conn):
+
+    sql = """
+        SELECT
+            wait_id,
+            transaction_type,
+            transaction_id,
+            ma_kho,
+            ma_sp,
+            so_luong,
+            saga_id,
+            ma_giao_dich_global,
+            trang_thai,
+            retry_count,
+            max_retry_count,
+            next_retry_at,
+            reason,
+            error_message
+        FROM transaction_wait_queue
+        WHERE trang_thai = 'WAITING'
+          AND next_retry_at <= CURRENT_TIMESTAMP
+          AND retry_count < max_retry_count
+        ORDER BY
+            next_retry_at,
+            wait_id
+    """
+
+    with node_conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()
+
+
+# ============================================================
+# 8. XỬ LÝ WAIT / RETRY TRÊN NODE
+# ============================================================
+
+def process_waiting_transactions(
+    node_code,
+    node_config
+):
+
+    node_name = node_config["node_name"]
+
+    node_conn = None
+
+    try:
+
+        node_conn = connect_database(node_config)
+
+        waiting = get_waiting_transactions(node_conn)
+
+        if not waiting:
+            return 0
+
+        print()
+        print(
+            f"[WAIT] {node_name}: "
+            f"{len(waiting)} giao dịch đến hạn retry"
+        )
+
+        for item in waiting:
+
+            print(
+                f"[WAIT] "
+                f"wait_id={item[0]} | "
+                f"type={item[1]} | "
+                f"id={item[2]} | "
+                f"retry={item[9]}/{item[10]}"
+            )
+
+        with node_conn.cursor() as cursor:
+
+            cursor.execute(
+                "SELECT sp_process_waiting_transactions(%s);",
+                (WAIT_RETRY_INTERVAL,)
+            )
+
+            result = cursor.fetchone()
+
+        node_conn.commit()
+
+        processed_count = 0
+
+        if result and result[0] is not None:
+            processed_count = result[0]
+
+        print(
+            f"[RETRY] {node_name}: "
+            f"đã xử lý {processed_count} giao dịch"
+        )
+
+        return processed_count
+
+    except Exception as error:
+
+        print(
+            f"[WAIT ERROR] {node_name}: "
+            f"{error}"
+        )
+
+        if node_conn is not None:
+
+            try:
+                node_conn.rollback()
+            except Exception:
+                pass
+
+        return 0
+
+    finally:
+
+        if node_conn is not None:
+            node_conn.close()
+
+
+# ============================================================
+# 9. ĐỒNG BỘ BẢNG KHO
 # ============================================================
 
 def sync_warehouses(
@@ -327,7 +455,7 @@ def sync_warehouses(
 
 
 # ============================================================
-# 8. ĐỒNG BỘ SẢN PHẨM
+# 10. ĐỒNG BỘ SẢN PHẨM
 # ============================================================
 
 def sync_products(
@@ -370,17 +498,13 @@ def sync_products(
     with central_conn.cursor() as cursor:
 
         for product in products:
-
-            cursor.execute(
-                sql,
-                product
-            )
+            cursor.execute(sql, product)
 
     central_conn.commit()
 
 
 # ============================================================
-# 9. ĐỒNG BỘ TỒN KHO
+# 11. ĐỒNG BỘ TỒN KHO
 # ============================================================
 
 def sync_inventory(
@@ -430,7 +554,7 @@ def sync_inventory(
 
 
 # ============================================================
-# 10. ĐỒNG BỘ NHẬP HÀNG
+# 12. ĐỒNG BỘ NHẬP HÀNG
 # ============================================================
 
 def sync_purchase_receipts(
@@ -504,7 +628,7 @@ def sync_purchase_receipts(
 
 
 # ============================================================
-# 11. ĐỒNG BỘ XUẤT HÀNG
+# 13. ĐỒNG BỘ XUẤT HÀNG
 # ============================================================
 
 def sync_outbound_shipments(
@@ -578,7 +702,7 @@ def sync_outbound_shipments(
 
 
 # ============================================================
-# 12. CẬP NHẬT TRẠNG THÁI NODE
+# 14. CẬP NHẬT NODE STATUS
 # ============================================================
 
 def update_node_status(
@@ -684,12 +808,11 @@ def update_node_status(
     except Exception:
 
         central_conn.rollback()
-
         raise
 
 
 # ============================================================
-# 13. GHI LOG ĐỒNG BỘ
+# 15. GHI LOG ĐỒNG BỘ
 # ============================================================
 
 def write_sync_log(
@@ -753,12 +876,11 @@ def write_sync_log(
     except Exception:
 
         central_conn.rollback()
-
         raise
 
 
 # ============================================================
-# 14. ĐỒNG BỘ MỘT NODE
+# 16. ĐỒNG BỘ MỘT NODE
 # ============================================================
 
 def sync_node(
@@ -774,8 +896,7 @@ def sync_node(
     print()
     print("=" * 70)
     print(
-        f"[{started_at}] "
-        f"ĐỒNG BỘ {node_name}"
+        f"[{started_at}] ĐỒNG BỘ {node_name}"
     )
     print("=" * 70)
 
@@ -787,92 +908,41 @@ def sync_node(
 
     try:
 
-        # ----------------------------------------------------
-        # 1. KẾT NỐI NODE
-        # ----------------------------------------------------
-
-        node_conn = connect_database(
-            node_config
-        )
+        node_conn = connect_database(node_config)
 
         print(
             f"[OK] Kết nối {node_name}"
         )
 
-
-        # ----------------------------------------------------
-        # 2. LẤY KHO
-        # ----------------------------------------------------
-
-        warehouses = get_warehouses(
-            node_conn
-        )
+        warehouses = get_warehouses(node_conn)
 
         print(
-            f"[DATA] Số kho: "
-            f"{len(warehouses)}"
+            f"[DATA] Số kho: {len(warehouses)}"
         )
 
-
-        # ----------------------------------------------------
-        # 3. LẤY SẢN PHẨM
-        # ----------------------------------------------------
-
-        products = get_products(
-            node_conn
-        )
+        products = get_products(node_conn)
 
         print(
-            f"[DATA] Số sản phẩm: "
-            f"{len(products)}"
+            f"[DATA] Số sản phẩm: {len(products)}"
         )
 
-
-        # ----------------------------------------------------
-        # 4. LẤY TỒN KHO
-        # ----------------------------------------------------
-
-        inventory = get_inventory(
-            node_conn
-        )
+        inventory = get_inventory(node_conn)
 
         print(
-            f"[DATA] Số bản ghi tồn kho: "
-            f"{len(inventory)}"
+            f"[DATA] Số bản ghi tồn kho: {len(inventory)}"
         )
 
-
-        # ----------------------------------------------------
-        # 5. LẤY NHẬP HÀNG
-        # ----------------------------------------------------
-
-        purchases = get_purchase_receipts(
-            node_conn
-        )
+        purchases = get_purchase_receipts(node_conn)
 
         print(
-            f"[DATA] Số dòng nhập hàng: "
-            f"{len(purchases)}"
+            f"[DATA] Số dòng nhập hàng: {len(purchases)}"
         )
 
-
-        # ----------------------------------------------------
-        # 6. LẤY XUẤT HÀNG
-        # ----------------------------------------------------
-
-        shipments = get_outbound_shipments(
-            node_conn
-        )
+        shipments = get_outbound_shipments(node_conn)
 
         print(
-            f"[DATA] Số dòng xuất hàng: "
-            f"{len(shipments)}"
+            f"[DATA] Số dòng xuất hàng: {len(shipments)}"
         )
-
-
-        # ----------------------------------------------------
-        # 7. TÍNH TỔNG BẢN GHI
-        # ----------------------------------------------------
 
         records_processed = (
             len(warehouses)
@@ -881,11 +951,6 @@ def sync_node(
             + len(purchases)
             + len(shipments)
         )
-
-
-        # ----------------------------------------------------
-        # 8. ĐỒNG BỘ KHO
-        # ----------------------------------------------------
 
         sync_warehouses(
             central_conn,
@@ -897,11 +962,6 @@ def sync_node(
             "[SYNC] Bảng kho: OK"
         )
 
-
-        # ----------------------------------------------------
-        # 9. ĐỒNG BỘ SẢN PHẨM
-        # ----------------------------------------------------
-
         sync_products(
             central_conn,
             products
@@ -910,11 +970,6 @@ def sync_node(
         print(
             "[SYNC] Bảng sản phẩm: OK"
         )
-
-
-        # ----------------------------------------------------
-        # 10. ĐỒNG BỘ TỒN KHO
-        # ----------------------------------------------------
 
         sync_inventory(
             central_conn,
@@ -926,11 +981,6 @@ def sync_node(
             "[SYNC] Bảng tồn kho: OK"
         )
 
-
-        # ----------------------------------------------------
-        # 11. ĐỒNG BỘ NHẬP HÀNG
-        # ----------------------------------------------------
-
         sync_purchase_receipts(
             central_conn,
             purchases,
@@ -940,11 +990,6 @@ def sync_node(
         print(
             "[SYNC] Bảng nhập hàng: OK"
         )
-
-
-        # ----------------------------------------------------
-        # 12. ĐỒNG BỘ XUẤT HÀNG
-        # ----------------------------------------------------
 
         sync_outbound_shipments(
             central_conn,
@@ -956,17 +1001,7 @@ def sync_node(
             "[SYNC] Bảng xuất hàng: OK"
         )
 
-
-        # ----------------------------------------------------
-        # 13. TÍNH THÀNH CÔNG
-        # ----------------------------------------------------
-
         records_success = records_processed
-
-
-        # ----------------------------------------------------
-        # 14. NODE ONLINE
-        # ----------------------------------------------------
 
         update_node_status(
             central_conn,
@@ -976,11 +1011,6 @@ def sync_node(
             None,
             True
         )
-
-
-        # ----------------------------------------------------
-        # 15. GHI LOG SUCCESS
-        # ----------------------------------------------------
 
         finished_at = datetime.now()
 
@@ -996,7 +1026,6 @@ def sync_node(
             None
         )
 
-
         print(
             f"[SUCCESS] {node_name} "
             f"đồng bộ thành công"
@@ -1007,6 +1036,7 @@ def sync_node(
             f"{records_success}/{records_processed}"
         )
 
+        return True
 
     except Exception as error:
 
@@ -1021,29 +1051,15 @@ def sync_node(
             f"Chi tiết: {error}"
         )
 
-
         records_failed = max(
             records_processed - records_success,
             1
         )
 
-
-        # ----------------------------------------------------
-        # ROLLBACK CENTRAL
-        # ----------------------------------------------------
-
         try:
-
             central_conn.rollback()
-
         except Exception:
-
             pass
-
-
-        # ----------------------------------------------------
-        # NODE OFFLINE
-        # ----------------------------------------------------
 
         try:
 
@@ -1066,22 +1082,12 @@ def sync_node(
                 "[ERROR] Không thể cập nhật node_status:"
             )
 
-            print(
-                status_error
-            )
+            print(status_error)
 
             try:
-
                 central_conn.rollback()
-
             except Exception:
-
                 pass
-
-
-        # ----------------------------------------------------
-        # GHI LOG FAILED
-        # ----------------------------------------------------
 
         try:
 
@@ -1108,18 +1114,14 @@ def sync_node(
                 "[ERROR] Không thể ghi sync_log:"
             )
 
-            print(
-                log_error
-            )
+            print(log_error)
 
             try:
-
                 central_conn.rollback()
-
             except Exception:
-
                 pass
 
+        return False
 
     finally:
 
@@ -1128,16 +1130,372 @@ def sync_node(
             node_conn.close()
 
             print(
-                f"[CLOSE] Đóng kết nối "
-                f"{node_name}"
+                f"[CLOSE] Đóng kết nối {node_name}"
             )
 
 
 # ============================================================
-# 16. ĐỌC CÁC PHIẾU ĐIỀU CHUYỂN ĐANG CHỜ
+# 17. XỬ LÝ WAIT/RETRY CHO TOÀN BỘ NODE
 # ============================================================
 
-def check_pending_transfers(central_conn):
+def process_all_waiting_transactions():
+
+    total_processed = 0
+
+    print()
+    print("=" * 70)
+    print(
+        "[WAIT/RETRY] KIỂM TRA HÀNG ĐỢI GIAO DỊCH"
+    )
+    print("=" * 70)
+
+    for node_code, node_config in NODES.items():
+
+        processed = process_waiting_transactions(
+            node_code,
+            node_config
+        )
+
+        total_processed += processed
+
+    print()
+    print(
+        f"[WAIT/RETRY] Tổng số giao dịch đã xử lý: "
+        f"{total_processed}"
+    )
+
+    return total_processed
+
+
+# ============================================================
+# 18. LẤY COMPENSATION REQUEST TỪ CENTRAL
+# ============================================================
+
+def get_pending_compensation_requests(
+    central_conn,
+    limit=20
+):
+
+    sql = """
+        SELECT
+            compensation_id,
+            saga_id,
+            ma_giao_dich_global,
+            ma_phieu_dc,
+            vwh_id,
+            discrepancy_id,
+            compensation_type,
+            source_node,
+            destination_node,
+            ma_kho,
+            ma_sp,
+            so_luong,
+            status,
+            retry_count,
+            max_retry_count,
+            next_retry_at,
+            error_message
+        FROM saga_compensation_request
+        WHERE status IN (
+            'PENDING',
+            'FAILED'
+        )
+          AND next_retry_at <= CURRENT_TIMESTAMP
+          AND retry_count < max_retry_count
+        ORDER BY
+            next_retry_at,
+            compensation_id
+        LIMIT %s
+    """
+
+    with central_conn.cursor() as cursor:
+
+        cursor.execute(
+            sql,
+            (limit,)
+        )
+
+        return cursor.fetchall()
+
+
+# ============================================================
+# 19. BẮT ĐẦU COMPENSATION
+# ============================================================
+
+def start_compensation(
+    central_conn,
+    compensation_id
+):
+
+    try:
+
+        with central_conn.cursor() as cursor:
+
+            cursor.execute(
+                """
+                SELECT sp_start_compensation(%s);
+                """,
+                (compensation_id,)
+            )
+
+        central_conn.commit()
+
+        return True
+
+    except Exception as error:
+
+        central_conn.rollback()
+
+        print(
+            f"[COMPENSATION ERROR] "
+            f"Không thể START ID={compensation_id}: "
+            f"{error}"
+        )
+
+        return False
+
+
+# ============================================================
+# 20. ĐÁNH DẤU COMPENSATION FAILED
+# ============================================================
+
+def fail_compensation(
+    central_conn,
+    compensation_id,
+    error_message
+):
+
+    try:
+
+        with central_conn.cursor() as cursor:
+
+            cursor.execute(
+                """
+                SELECT sp_fail_compensation(
+                    %s,
+                    %s,
+                    %s
+                );
+                """,
+                (
+                    compensation_id,
+                    error_message,
+                    COMPENSATION_RETRY_INTERVAL
+                )
+            )
+
+        central_conn.commit()
+
+    except Exception as error:
+
+        central_conn.rollback()
+
+        print(
+            f"[COMPENSATION ERROR] "
+            f"Không thể FAIL ID={compensation_id}: "
+            f"{error}"
+        )
+
+
+# ============================================================
+# 21. ĐỌC COMPENSATION
+# ============================================================
+
+def process_compensation_requests(
+    central_conn
+):
+
+    total = 0
+
+    try:
+
+        requests = get_pending_compensation_requests(
+            central_conn
+        )
+
+        if not requests:
+
+            return 0
+
+        print()
+        print("=" * 70)
+        print(
+            "[COMPENSATION] "
+            f"Có {len(requests)} yêu cầu cần xử lý"
+        )
+        print("=" * 70)
+
+        for item in requests:
+
+            compensation_id = item[0]
+            saga_id = item[1]
+            global_id = item[2]
+            ma_phieu_dc = item[3]
+            vwh_id = item[4]
+            discrepancy_id = item[5]
+            compensation_type = item[6]
+            source_node = item[7]
+            destination_node = item[8]
+            ma_kho = item[9]
+            ma_sp = item[10]
+            so_luong = item[11]
+            status = item[12]
+            retry_count = item[13]
+            max_retry_count = item[14]
+
+            print(
+                f"[COMPENSATION] "
+                f"ID={compensation_id} | "
+                f"type={compensation_type} | "
+                f"phiếu={ma_phieu_dc} | "
+                f"kho={ma_kho} | "
+                f"SP={ma_sp} | "
+                f"SL={so_luong} | "
+                f"node={source_node} | "
+                f"retry={retry_count}/{max_retry_count}"
+            )
+
+            if source_node is None:
+
+                fail_compensation(
+                    central_conn,
+                    compensation_id,
+                    "Không xác định được source_node"
+                )
+
+                continue
+
+            node_config = None
+
+            for node_code, config in NODES.items():
+
+                if config["node_name"] == source_node:
+
+                    node_config = config
+                    break
+
+            if node_config is None:
+
+                fail_compensation(
+                    central_conn,
+                    compensation_id,
+                    f"Không tìm thấy cấu hình node: {source_node}"
+                )
+
+                continue
+
+            started = start_compensation(
+                central_conn,
+                compensation_id
+            )
+
+            if not started:
+                continue
+
+            print(
+                f"[COMPENSATION] "
+                f"ID={compensation_id} "
+                f"-> PROCESSING"
+            )
+
+            print(
+                f"[COMPENSATION] "
+                f"Node đích xử lý: {source_node}"
+            )
+
+            print(
+                f"[COMPENSATION] "
+                f"Loại: {compensation_type}"
+            )
+
+            print(
+                "[COMPENSATION] "
+                "Đang chờ procedure phía NODE xử lý."
+            )
+
+            total += 1
+
+        return total
+
+    except Exception as error:
+
+        print(
+            "[COMPENSATION ERROR]"
+        )
+
+        print(error)
+
+        try:
+            central_conn.rollback()
+        except Exception:
+            pass
+
+        return total
+
+
+# ============================================================
+# 22. KIỂM TRA COMPENSATION TIMEOUT
+# ============================================================
+
+def check_compensation_timeout(
+    central_conn
+):
+
+    sql = """
+        SELECT
+            compensation_id,
+            retry_count,
+            max_retry_count
+        FROM saga_compensation_request
+        WHERE status = 'PROCESSING'
+          AND retry_count >= max_retry_count
+    """
+
+    try:
+
+        with central_conn.cursor() as cursor:
+
+            cursor.execute(sql)
+
+            rows = cursor.fetchall()
+
+        if not rows:
+            return 0
+
+        timeout_count = 0
+
+        for row in rows:
+
+            compensation_id = row[0]
+
+            fail_compensation(
+                central_conn,
+                compensation_id,
+                "Compensation vượt quá số lần retry"
+            )
+
+            timeout_count += 1
+
+        return timeout_count
+
+    except Exception as error:
+
+        print(
+            f"[COMPENSATION TIMEOUT ERROR] {error}"
+        )
+
+        central_conn.rollback()
+
+        return 0
+
+
+# ============================================================
+# 23. KIỂM TRA CÁC PHIẾU ĐIỀU CHUYỂN
+# ============================================================
+
+def check_pending_transfers(
+    central_conn
+):
 
     try:
 
@@ -1171,9 +1529,7 @@ def check_pending_transfers(central_conn):
             "dieu_chuyen_central:"
         )
 
-        print(
-            error
-        )
+        print(error)
 
         central_conn.rollback()
 
@@ -1181,18 +1537,16 @@ def check_pending_transfers(central_conn):
 
 
 # ============================================================
-# 17. ĐỒNG BỘ TOÀN BỘ NODE
+# 24. ĐỒNG BỘ TOÀN BỘ NODE
 # ============================================================
 
 def sync_all_nodes():
 
     print()
     print("#" * 70)
-
     print(
         "        WAREHOUSE CENTRAL SYNC SERVICE"
     )
-
     print("#" * 70)
 
     print(
@@ -1203,10 +1557,6 @@ def sync_all_nodes():
 
     try:
 
-        # ----------------------------------------------------
-        # KẾT NỐI CENTRAL
-        # ----------------------------------------------------
-
         central_conn = connect_database(
             CENTRAL
         )
@@ -1215,9 +1565,12 @@ def sync_all_nodes():
             "[OK] Kết nối CENTRAL"
         )
 
+        ensure_central_schema(
+            central_conn
+        )
 
         # ----------------------------------------------------
-        # ĐỒNG BỘ 3 NODE
+        # 1. SYNC 3 NODE
         # ----------------------------------------------------
 
         for node_code, node_config in NODES.items():
@@ -1228,21 +1581,40 @@ def sync_all_nodes():
                 central_conn
             )
 
+        # ----------------------------------------------------
+        # 2. WAIT / RETRY
+        # ----------------------------------------------------
+
+        process_all_waiting_transactions()
 
         # ----------------------------------------------------
-        # KIỂM TRA ĐIỀU CHUYỂN
+        # 3. COMPENSATION
+        # ----------------------------------------------------
+
+        process_compensation_requests(
+            central_conn
+        )
+
+        # ----------------------------------------------------
+        # 4. KIỂM TRA TIMEOUT
+        # ----------------------------------------------------
+
+        check_compensation_timeout(
+            central_conn
+        )
+
+        # ----------------------------------------------------
+        # 5. KIỂM TRA PHIẾU ĐIỀU CHUYỂN
         # ----------------------------------------------------
 
         check_pending_transfers(
             central_conn
         )
 
-
         print()
         print(
             "[DONE] Hoàn tất chu kỳ đồng bộ"
         )
-
 
     except Exception as error:
 
@@ -1254,7 +1626,6 @@ def sync_all_nodes():
         print(
             f"Chi tiết: {error}"
         )
-
 
     finally:
 
@@ -1268,7 +1639,7 @@ def sync_all_nodes():
 
 
 # ============================================================
-# 18. MAIN
+# 25. MAIN
 # ============================================================
 
 def main():
@@ -1286,6 +1657,18 @@ def main():
         f"Chu kỳ đồng bộ: "
         f"{SYNC_INTERVAL} giây"
     )
+
+    print(
+        f"Chu kỳ WAIT/RETRY: "
+        f"{WAIT_RETRY_INTERVAL} giây"
+    )
+
+    print(
+        f"Chu kỳ COMPENSATION RETRY: "
+        f"{COMPENSATION_RETRY_INTERVAL} giây"
+    )
+
+    print()
 
     print(
         "Các node:"
@@ -1309,17 +1692,11 @@ def main():
         "Service đang chạy..."
     )
 
-
-    # --------------------------------------------------------
-    # CHẠY LIÊN TỤC
-    # --------------------------------------------------------
-
     while True:
 
         try:
 
             sync_all_nodes()
-
 
         except KeyboardInterrupt:
 
@@ -1330,20 +1707,17 @@ def main():
 
             break
 
-
         except Exception as error:
 
             print(
                 f"[ERROR] {error}"
             )
 
-
         print()
 
         print(
             f"Chờ {SYNC_INTERVAL} giây..."
         )
-
 
         try:
 

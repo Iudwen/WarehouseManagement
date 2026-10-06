@@ -68,7 +68,7 @@ SELECT
     ma_sp,
     SUM(so_luong) AS tong_so_luong_ban,
     SUM(thanh_tien) AS tong_doanh_thu
-FROM ban_hang_central
+FROM xuat_hang_central
 GROUP BY
     ma_sp;
 
@@ -85,7 +85,7 @@ SELECT
     sp.ten_sp,
     SUM(bh.so_luong) AS tong_so_luong_ban,
     SUM(bh.thanh_tien) AS tong_doanh_thu
-FROM ban_hang_central bh
+FROM xuat_hang_central bh
 JOIN kho k
     ON bh.ma_kho = k.ma_kho
 JOIN san_pham sp
@@ -193,7 +193,7 @@ xuat AS (
     SELECT
         ngay_ban::date AS ngay,
         SUM(so_luong) AS tong_xuat
-    FROM ban_hang_central
+    FROM xuat_hang_central
     GROUP BY
         ngay_ban::date
 ),
@@ -537,7 +537,7 @@ SELECT
 
     (
         SELECT COALESCE(SUM(so_luong), 0)
-        FROM ban_hang_central
+        FROM xuat_hang_central
     ) AS tong_so_luong_xuat,
 
     (
