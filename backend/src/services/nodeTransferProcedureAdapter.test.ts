@@ -92,6 +92,17 @@ const receiveCommand: ReceiveTransferCommand = {
   so_luong: 20,
 };
 
+const receiveDiscrepancyCommand: ReceiveTransferCommand = {
+  saga_id: '00000000-0000-0000-0000-000000000101',
+  global_id: '00000000-0000-0000-0000-000000000102',
+  ma_phieu_dc: 'DC_TASK_39',
+  ma_kho: 'HCM01',
+  ma_sp: 'SP001',
+  so_luong: 20,
+  so_luong_thuc_nhan: 18,
+  ly_do_thieu: 'Hàng bị móp vỡ trong quá trình vận chuyển',
+};
+
 // --- TESTS FOR acceptTransferAtNode ---
 
 test('routes to the owner node and passes all six procedure parameters for acceptTransferAtNode', async () => {
@@ -185,9 +196,9 @@ test('rolls back and rethrows when shipTransferAtNode procedure fails', async ()
   assert.equal(client.outboxEvent, null);
 });
 
-// --- TESTS FOR receiveTransferAtNode (Task 3.7) ---
+// --- TESTS FOR receiveTransferAtNode (Task 3.7 & Task 3.9) ---
 
-test('routes to the owner node and passes all six procedure parameters for receiveTransferAtNode', async () => {
+test('routes to the owner node and passes all eight procedure parameters for receiveTransferAtNode (default nulls)', async () => {
   const client = new FakeNodeClient();
   const pool = new FakeNodePool(client);
   let selectedWarehouse = '';
@@ -206,6 +217,8 @@ test('routes to the owner node and passes all six procedure parameters for recei
     receiveCommand.ma_kho,
     receiveCommand.ma_sp,
     receiveCommand.so_luong,
+    null,
+    null,
   ]);
   assert.equal(client.calls[0].text, 'BEGIN');
   assert.equal(client.calls.at(-1)?.text, 'COMMIT');
@@ -213,6 +226,33 @@ test('routes to the owner node and passes all six procedure parameters for recei
   assert.equal(client.outboxEvent, 'TRANSFER_COMPLETED');
   assert.equal(client.calls.some((call) => call.text.includes('sp_accept_transfer')), false);
   assert.equal(client.calls.some((call) => call.text.includes('sp_ship_transfer')), false);
+});
+
+test('passes discrepancy parameters (actual quantity and reason) for receiveTransferAtNode', async () => {
+  const client = new FakeNodeClient();
+  const pool = new FakeNodePool(client);
+  let selectedWarehouse = '';
+
+  await receiveTransferAtNode(receiveDiscrepancyCommand, (maKho) => {
+    selectedWarehouse = maKho;
+    return pool;
+  });
+
+  const procedureCall = client.calls.find((call) => call.text.includes('sp_receive_transfer'));
+  assert.equal(selectedWarehouse, 'HCM01');
+  assert.deepEqual(procedureCall?.values, [
+    receiveDiscrepancyCommand.saga_id,
+    receiveDiscrepancyCommand.global_id,
+    receiveDiscrepancyCommand.ma_phieu_dc,
+    receiveDiscrepancyCommand.ma_kho,
+    receiveDiscrepancyCommand.ma_sp,
+    receiveDiscrepancyCommand.so_luong,
+    18,
+    'Hàng bị móp vỡ trong quá trình vận chuyển',
+  ]);
+  assert.equal(client.calls[0].text, 'BEGIN');
+  assert.equal(client.calls.at(-1)?.text, 'COMMIT');
+  assert.equal(client.received, true);
 });
 
 test('rolls back and rethrows when receiveTransferAtNode procedure fails', async () => {

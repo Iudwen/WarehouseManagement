@@ -282,9 +282,9 @@ test('source shipment fails when global_id is missing', async () => {
   assert.equal(adapterCalled, false);
 });
 
-// --- TESTS FOR receiveDestinationTransfer (Task 3.7) ---
+// --- TESTS FOR receiveDestinationTransfer (Task 3.7 & Task 3.9) ---
 
-test('destination receiving loads Saga context and calls node receive adapter', async () => {
+test('destination receiving loads Saga context and calls node receive adapter (Happy Path 20/20)', async () => {
   let receivedCommand: ReceiveTransferCommand | undefined;
 
   const result = await receiveDestinationTransfer('DC_TASK_37', managerHCM, {
@@ -301,6 +301,8 @@ test('destination receiving loads Saga context and calls node receive adapter', 
     ma_kho: receiveSagaContext.kho_nhap,
     ma_sp: receiveSagaContext.ma_sp,
     so_luong: receiveSagaContext.so_luong_yeu_cau,
+    so_luong_thuc_nhan: 20,
+    ly_do_thieu: undefined,
   });
   assert.equal(result.event_type, 'TRANSFER_COMPLETED');
   assert.equal(result.global_id, receiveSagaContext.global_id);
@@ -414,6 +416,115 @@ test('destination receiving fails when global_id is missing', async () => {
         },
       }),
     /thiếu ma_giao_dich_global/,
+  );
+
+  assert.equal(adapterCalled, false);
+});
+
+// --- TASK 3.9 DISCREPANCY SUPPORT TESTS ---
+
+test('destination receiving 18/20 with reason succeeds and emits TRANSFER_COMPLETED_WITH_DISCREPANCY', async () => {
+  let receivedCommand: ReceiveTransferCommand | undefined;
+
+  const result = await receiveDestinationTransfer(
+    'DC_TASK_37',
+    managerHCM,
+    {
+      so_luong_thuc_nhan: 18,
+      ly_do_thieu: 'Hàng bị móp vỡ do vận chuyển',
+    },
+    {
+      loadSagaContext: async () => receiveSagaContext,
+      receiveTransfer: async (command) => {
+        receivedCommand = command;
+      },
+    },
+  );
+
+  assert.deepEqual(receivedCommand, {
+    saga_id: receiveSagaContext.saga_id,
+    global_id: receiveSagaContext.global_id,
+    ma_phieu_dc: receiveSagaContext.ma_phieu_dc,
+    ma_kho: receiveSagaContext.kho_nhap,
+    ma_sp: receiveSagaContext.ma_sp,
+    so_luong: receiveSagaContext.so_luong_yeu_cau,
+    so_luong_thuc_nhan: 18,
+    ly_do_thieu: 'Hàng bị móp vỡ do vận chuyển',
+  });
+  assert.equal(result.event_type, 'TRANSFER_COMPLETED_WITH_DISCREPANCY');
+  assert.equal(result.so_luong_thuc_nhan, 18);
+  assert.equal(result.ly_do_thieu, 'Hàng bị móp vỡ do vận chuyển');
+});
+
+test('destination receiving 18/20 without reason fails with validation error', async () => {
+  let adapterCalled = false;
+
+  await assert.rejects(
+    () =>
+      receiveDestinationTransfer(
+        'DC_TASK_37',
+        managerHCM,
+        {
+          so_luong_thuc_nhan: 18,
+          ly_do_thieu: '   ', // Rỗng hoặc chỉ chứa khoảng trắng
+        },
+        {
+          loadSagaContext: async () => receiveSagaContext,
+          receiveTransfer: async () => {
+            adapterCalled = true;
+          },
+        },
+      ),
+    /Bắt buộc phải nhập lý do thiếu khi số lượng thực nhận không đủ/,
+  );
+
+  assert.equal(adapterCalled, false);
+});
+
+test('destination receiving zero or negative actual quantity fails validation', async () => {
+  let adapterCalled = false;
+
+  await assert.rejects(
+    () =>
+      receiveDestinationTransfer(
+        'DC_TASK_37',
+        managerHCM,
+        {
+          so_luong_thuc_nhan: 0,
+          ly_do_thieu: 'Không nhận được hàng',
+        },
+        {
+          loadSagaContext: async () => receiveSagaContext,
+          receiveTransfer: async () => {
+            adapterCalled = true;
+          },
+        },
+      ),
+    /Số lượng thực nhận phải lớn hơn 0/,
+  );
+
+  assert.equal(adapterCalled, false);
+});
+
+test('destination receiving actual quantity exceeding requested quantity fails validation', async () => {
+  let adapterCalled = false;
+
+  await assert.rejects(
+    () =>
+      receiveDestinationTransfer(
+        'DC_TASK_37',
+        managerHCM,
+        {
+          so_luong_thuc_nhan: 25, // Nhận 25 trong khi yêu cầu chỉ 20
+        },
+        {
+          loadSagaContext: async () => receiveSagaContext,
+          receiveTransfer: async () => {
+            adapterCalled = true;
+          },
+        },
+      ),
+    /không được lớn hơn số lượng yêu cầu/,
   );
 
   assert.equal(adapterCalled, false);

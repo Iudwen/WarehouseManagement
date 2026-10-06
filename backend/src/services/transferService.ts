@@ -28,6 +28,11 @@ export interface SagaTransferContext {
   status: string;
 }
 
+export interface DiscrepancyOptions {
+  so_luong_thuc_nhan?: number;
+  ly_do_thieu?: string;
+}
+
 type SourceConfirmationActor = Pick<
   UserPayload,
   'ma_nguoi_dung' | 'vai_tro' | 'ma_kho'
@@ -140,7 +145,7 @@ export const approveTransfer = async (maPhieuDc: string) => {
 
   try {
     await client.query('BEGIN');
-    const result = await client.query(
+    const result = await client.query<{ trang_thai: string }>(
       `SELECT trang_thai
        FROM dieu_chuyen_central
        WHERE ma_phieu_dc = $1
@@ -156,7 +161,7 @@ export const approveTransfer = async (maPhieuDc: string) => {
       throw new Error(`Yêu cầu đang ở trạng thái ${result.rows[0].trang_thai}`);
     }
 
-    const saga = await client.query(
+    const saga = await client.query<{ saga_id: string }>(
       `SELECT sp_create_saga($1) AS saga_id`,
       [maPhieuDc],
     );
@@ -325,13 +330,30 @@ const defaultDestinationReceivingDependencies: DestinationReceivingDependencies 
 };
 
 /**
- * Task 3.7: Lệnh nhận hàng tại kho đích (Destination Receiving)
+ * Task 3.7 & 3.9: Lệnh nhận hàng tại kho đích (Destination Receiving & Discrepancy Support)
+ */
+/**
+ * Task 3.7 & 3.9: Lệnh nhận hàng tại kho đích (Destination Receiving & Discrepancy Support)
+ * Hỗ trợ cả 3 tham số (backward compatible) và 4 tham số (Discrepancy options)
  */
 export const receiveDestinationTransfer = async (
   maPhieuDc: string,
   actor: DestinationReceivingActor,
-  dependencies: DestinationReceivingDependencies = defaultDestinationReceivingDependencies,
+  optionsOrDeps?: DiscrepancyOptions | DestinationReceivingDependencies,
+  deps?: DestinationReceivingDependencies,
 ) => {
+  let discrepancyOptions: DiscrepancyOptions | undefined;
+  let dependencies: DestinationReceivingDependencies;
+
+  // Tự động nhận diện nếu tham số thứ 3 là dependencies (test cases cũ)
+  if (optionsOrDeps && ('loadSagaContext' in optionsOrDeps || 'receiveTransfer' in optionsOrDeps)) {
+    dependencies = optionsOrDeps as DestinationReceivingDependencies;
+    discrepancyOptions = undefined;
+  } else {
+    discrepancyOptions = optionsOrDeps as DiscrepancyOptions | undefined;
+    dependencies = deps || defaultDestinationReceivingDependencies;
+  }
+
   const sagaContext = await dependencies.loadSagaContext(maPhieuDc);
 
   if (!sagaContext) {
@@ -361,6 +383,24 @@ export const receiveDestinationTransfer = async (
     );
   }
 
+  // --- TASK 3.9: Validate & xử lý thông tin chênh lệch ---
+  const actualQty = discrepancyOptions?.so_luong_thuc_nhan ?? sagaContext.so_luong_yeu_cau;
+  const reason = discrepancyOptions?.ly_do_thieu?.trim();
+
+  if (actualQty <= 0) {
+    throw new Error('Số lượng thực nhận phải lớn hơn 0');
+  }
+
+  if (actualQty > sagaContext.so_luong_yeu_cau) {
+    throw new Error(`Số lượng thực nhận (\({actualQty}) không được lớn hơn số lượng yêu cầu (\){sagaContext.so_luong_yeu_cau})`);
+  }
+
+  const isDiscrepancy = actualQty < sagaContext.so_luong_yeu_cau;
+
+  if (isDiscrepancy && (!reason || reason === '')) {
+    throw new Error('Bắt buộc phải nhập lý do thiếu khi số lượng thực nhận không đủ');
+  }
+
   const command: ReceiveTransferCommand = {
     saga_id: sagaContext.saga_id,
     global_id: sagaContext.global_id,
@@ -368,6 +408,8 @@ export const receiveDestinationTransfer = async (
     ma_kho: sagaContext.kho_nhap,
     ma_sp: sagaContext.ma_sp,
     so_luong: sagaContext.so_luong_yeu_cau,
+    so_luong_thuc_nhan: actualQty,
+    ly_do_thieu: isDiscrepancy ? reason : undefined,
   };
 
   await dependencies.receiveTransfer(command);
@@ -378,6 +420,8 @@ export const receiveDestinationTransfer = async (
     saga_id: sagaContext.saga_id,
     global_id: sagaContext.global_id,
     ma_kho: sagaContext.kho_nhap,
-    event_type: 'TRANSFER_COMPLETED',
+    event_type: isDiscrepancy ? 'TRANSFER_COMPLETED_WITH_DISCREPANCY' : 'TRANSFER_COMPLETED',
+    so_luong_thuc_nhan: actualQty,
+    ly_do_thieu: isDiscrepancy ? reason : null,
   };
 };

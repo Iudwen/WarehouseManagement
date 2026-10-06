@@ -74,7 +74,7 @@ export const handleSourceShipment = async (
 };
 
 /**
- * Task 3.7: Controller xử lý lệnh nhận hàng tại kho đích (Destination Receiving)
+ * Task 3.7 & 3.9: Controller xử lý lệnh nhận hàng tại kho đích (Destination Receiving & Discrepancy Support)
  */
 export const handleDestinationReceiving = async (
   req: CustomRequest,
@@ -86,7 +86,19 @@ export const handleDestinationReceiving = async (
       return;
     }
 
-    const result = await receiveDestinationTransfer(req.params.maPhieu, req.user);
+    const { so_luong_thuc_nhan, ly_do_thieu } = req.body || {};
+
+    const discrepancyOptions = {
+      so_luong_thuc_nhan: so_luong_thuc_nhan !== undefined ? Number(so_luong_thuc_nhan) : undefined,
+      ly_do_thieu: ly_do_thieu ? String(ly_do_thieu).trim() : undefined,
+    };
+
+    const result = await receiveDestinationTransfer(
+      req.params.maPhieu,
+      req.user,
+      discrepancyOptions,
+    );
+
     res.status(202).json({
       message: 'Đã nhận hàng tại kho đích, quá trình cập nhật kho đang được xử lý tại node sở hữu',
       data: result,

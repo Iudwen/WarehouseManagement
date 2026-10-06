@@ -117,6 +117,7 @@ services:
       - ./nodes/node_hcm/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
       - ./nodes/node_hcm/09_add_approval_workflow.sql:/docker-entrypoint-initdb.d/09_add_approval_workflow.sql:ro
       - ./nodes/node_hcm/10_align_runtime_schema.sql:/docker-entrypoint-initdb.d/10_align_runtime_schema.sql:ro
+      - ./nodes/node_hcm/11_add_discrepancy_support.sql:/docker-entrypoint-initdb.d/11_add_discrepancy_support.sql:ro
 
     healthcheck:
       test:
@@ -160,6 +161,7 @@ services:
       - ./data_center/central_database/07_saga_procedures.sql:/docker-entrypoint-initdb.d/07_saga_procedures.sql:ro
       - ./data_center/central_database/08_fix_node_ownership.sql:/docker-entrypoint-initdb.d/08_fix_node_ownership.sql:ro
       - ./data_center/central_database/09_fix_etl_idempotency.sql:/docker-entrypoint-initdb.d/09_fix_etl_idempotency.sql:ro
+      - ./data_center/central_database/10_add_discrepancy_support.sql:/docker-entrypoint-initdb.d/10_add_discrepancy_support.sql:ro
 
     healthcheck:
       test:
