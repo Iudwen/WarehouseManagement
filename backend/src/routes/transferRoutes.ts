@@ -1,4 +1,4 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 import {
   handleApproveTransfer,
   handleDestinationReceiving,
@@ -6,54 +6,53 @@ import {
   handleSourceShipment,
   handleTransfer,
 } from '../controllers/transferController';
-import { verifyToken, branchGuard, verifyRole } from '../middlewares/auth';
+import { verifyToken, verifyRole } from '../middlewares/auth';
 import { dbSelector } from '../middlewares/dbSelector';
 
 const router = Router();
 
-// Pipeline bảo vệ 4 lớp: Bắt buộc Token -> Chọn DB -> Guard Chi nhánh -> Siết quyền ADMIN/MANAGER
+// ĐIỀU PHỐI: tạo yêu cầu điều chuyển
 router.post(
   '/',
   verifyToken,
   dbSelector,
-  branchGuard,
-  verifyRole(['ADMIN', 'MANAGER']), // STAFF gọi API này sẽ nhận ngay 403 Forbidden
+  verifyRole(['DIEU_PHOI']),
   handleTransfer
 );
 
+// QUẢN LÝ KHO NGUỒN: duyệt yêu cầu
 router.post(
   '/:maPhieu/approve',
   verifyToken,
   dbSelector,
-  branchGuard,
-  verifyRole(['ADMIN', 'MANAGER']),
+  verifyRole(['MANAGER']),
   handleApproveTransfer
 );
 
+// QUẢN LÝ KHO NGUỒN: xác nhận nguồn
 router.post(
   '/:maPhieu/source-confirm',
   verifyToken,
   dbSelector,
-  branchGuard,
-  verifyRole(['ADMIN', 'MANAGER']),
+  verifyRole(['MANAGER']),
   handleSourceConfirmation
 );
 
+// NHÂN VIÊN KHO NGUỒN: xuất hàng
 router.post(
   '/:maPhieu/source-ship',
   verifyToken,
   dbSelector,
-  branchGuard,
-  verifyRole(['ADMIN', 'MANAGER']),
+  verifyRole(['STAFF']),
   handleSourceShipment
 );
 
+// NHÂN VIÊN KHO ĐÍCH: nhận hàng
 router.post(
   '/:maPhieu/destination-receive',
   verifyToken,
   dbSelector,
-  branchGuard,
-  verifyRole(['ADMIN', 'MANAGER']),
+  verifyRole(['STAFF']),
   handleDestinationReceiving
 );
 

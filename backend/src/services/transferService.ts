@@ -69,8 +69,13 @@ const nodeByWarehouse: Record = {
   HCM01: 'NODE_HCM',
 };
 
-const validateTransfer = (payload: TransferPayload, userKho?: string, userRole?: string): void => {
+const validateTransfer = (
+  payload: TransferPayload,
+  userKho?: string,
+  userRole?: string,
+): void => {
   const { ma_phieu_dc, kho_xuat, kho_nhap, items } = payload;
+
   const normalizedSource = kho_xuat?.trim().toUpperCase();
   const normalizedDestination = kho_nhap?.trim().toUpperCase();
 
@@ -82,7 +87,12 @@ const validateTransfer = (payload: TransferPayload, userKho?: string, userRole?:
     throw new Error('Mỗi yêu cầu điều chuyển hiện chỉ hỗ trợ một sản phẩm');
   }
 
-  if (!nodeByWarehouse[normalizedSource] || !nodeByWarehouse[normalizedDestination]) {
+  if (
+    !normalizedSource ||
+    !normalizedDestination ||
+    !nodeByWarehouse[normalizedSource] ||
+    !nodeByWarehouse[normalizedDestination]
+  ) {
     throw new Error('Kho xuất hoặc kho nhập không hợp lệ');
   }
 
@@ -94,8 +104,24 @@ const validateTransfer = (payload: TransferPayload, userKho?: string, userRole?:
     throw new Error('Sản phẩm và số lượng điều chuyển phải hợp lệ');
   }
 
-  if (userRole !== 'ADMIN' && userKho?.toUpperCase() !== normalizedSource) {
-    throw new Error(`Tài khoản thuộc kho \({userKho}, không có quyền xuất hàng từ kho\){normalizedSource}`);
+  // ĐIỀU PHỐI là vai trò trung tâm nên không bị giới hạn bởi ma_kho.
+  if (userRole === 'DIEU_PHOI') {
+    return;
+  }
+
+  // ADMIN cũng không bị giới hạn bởi kho.
+  if (userRole === 'ADMIN') {
+    return;
+  }
+
+  // Các vai trò thuộc một kho chỉ được tạo yêu cầu từ chính kho của mình.
+  if (
+    !userKho ||
+    userKho.toUpperCase() !== normalizedSource
+  ) {
+    throw new Error(
+      `Tài khoản thuộc kho ${userKho || 'không xác định'}, không có quyền xuất hàng từ kho ${normalizedSource}`,
+    );
   }
 };
 
@@ -140,13 +166,26 @@ export const processTransfer = async (
   }
 };
 
-export const approveTransfer = async (maPhieuDc: string) => {
+export const approveTransfer = async (
+  maPhieuDc: string,
+  actor: Pick<UserPayload, 'ma_nguoi_dung' | 'vai_tro' | 'ma_kho'>,
+) => {
   const client = await pools.CENTRAL.connect();
 
   try {
+    // Chỉ QUẢN LÝ KHO mới được duyệt
+    if (actor.vai_tro !== 'MANAGER') {
+      throw new Error('Chỉ quản lý kho mới được duyệt yêu cầu điều chuyển');
+    }
+
     await client.query('BEGIN');
-    const result = await client.query<{ trang_thai: string }>(
-      `SELECT trang_thai
+
+    // Lấy thông tin phiếu và khóa bản ghi để tránh duyệt đồng thời
+    const result = await client.query<{
+      trang_thai: string;
+      kho_xuat: string;
+    }>(
+      `SELECT trang_thai, kho_xuat
        FROM dieu_chuyen_central
        WHERE ma_phieu_dc = $1
        FOR UPDATE`,
@@ -157,14 +196,31 @@ export const approveTransfer = async (maPhieuDc: string) => {
       throw new Error('Không tìm thấy yêu cầu điều chuyển');
     }
 
-    if (result.rows[0].trang_thai !== 'PENDING') {
-      throw new Error(`Yêu cầu đang ở trạng thái ${result.rows[0].trang_thai}`);
+    const transfer = result.rows[0];
+
+    // Chỉ quản lý đúng kho nguồn mới được duyệt
+    if (
+      !actor.ma_kho ||
+      actor.ma_kho.toUpperCase() !== transfer.kho_xuat.toUpperCase()
+    ) {
+      throw new Error(
+        `Quản lý kho ${actor.ma_kho || 'không xác định'} không có quyền duyệt phiếu xuất từ kho ${transfer.kho_xuat}`,
+      );
     }
 
+    // Chỉ phiếu đang chờ duyệt mới được duyệt
+    if (transfer.trang_thai !== 'PENDING') {
+      throw new Error(
+        `Yêu cầu đang ở trạng thái ${transfer.trang_thai}`,
+      );
+    }
+
+    // Tạo Saga
     const saga = await client.query<{ saga_id: string }>(
       `SELECT sp_create_saga($1) AS saga_id`,
       [maPhieuDc],
     );
+
     await client.query('COMMIT');
 
     return {

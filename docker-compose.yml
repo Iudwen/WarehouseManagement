@@ -13,6 +13,15 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB_HN}
 
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+
     ports:
       - "${POSTGRES_PORT_HN}:5432"
 
@@ -27,8 +36,6 @@ services:
       - ./nodes/node_hn/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
       - ./nodes/node_hn/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
       - ./nodes/node_hn/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
-      - ./nodes/node_hn/09_add_approval_workflow.sql:/docker-entrypoint-initdb.d/09_add_approval_workflow.sql:ro
-      - ./nodes/node_hn/10_align_runtime_schema.sql:/docker-entrypoint-initdb.d/10_align_runtime_schema.sql:ro
 
     healthcheck:
       test:
@@ -57,6 +64,15 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB_DN}
 
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+
     ports:
       - "${POSTGRES_PORT_DN}:5432"
 
@@ -71,8 +87,6 @@ services:
       - ./nodes/node_dn/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
       - ./nodes/node_dn/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
       - ./nodes/node_dn/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
-      - ./nodes/node_dn/09_add_approval_workflow.sql:/docker-entrypoint-initdb.d/09_add_approval_workflow.sql:ro
-      - ./nodes/node_dn/10_align_runtime_schema.sql:/docker-entrypoint-initdb.d/10_align_runtime_schema.sql:ro
 
     healthcheck:
       test:
@@ -101,6 +115,15 @@ services:
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
       POSTGRES_DB: ${POSTGRES_DB_HCM}
 
+
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
     ports:
       - "${POSTGRES_PORT_HCM}:5432"
 
@@ -115,9 +138,6 @@ services:
       - ./nodes/node_hcm/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
       - ./nodes/node_hcm/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
       - ./nodes/node_hcm/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
-      - ./nodes/node_hcm/09_add_approval_workflow.sql:/docker-entrypoint-initdb.d/09_add_approval_workflow.sql:ro
-      - ./nodes/node_hcm/10_align_runtime_schema.sql:/docker-entrypoint-initdb.d/10_align_runtime_schema.sql:ro
-      - ./nodes/node_hcm/11_add_discrepancy_support.sql:/docker-entrypoint-initdb.d/11_add_discrepancy_support.sql:ro
 
     healthcheck:
       test:
@@ -158,10 +178,6 @@ services:
       - ./data_center/central_database/04_create_views.sql:/docker-entrypoint-initdb.d/04_create_views.sql:ro
       - ./data_center/central_database/05_create_indexes.sql:/docker-entrypoint-initdb.d/05_create_indexes.sql:ro
       - ./data_center/central_database/06_create_saga_monitoring.sql:/docker-entrypoint-initdb.d/06_create_saga_monitoring.sql:ro
-      - ./data_center/central_database/07_saga_procedures.sql:/docker-entrypoint-initdb.d/07_saga_procedures.sql:ro
-      - ./data_center/central_database/08_fix_node_ownership.sql:/docker-entrypoint-initdb.d/08_fix_node_ownership.sql:ro
-      - ./data_center/central_database/09_fix_etl_idempotency.sql:/docker-entrypoint-initdb.d/09_fix_etl_idempotency.sql:ro
-      - ./data_center/central_database/10_add_discrepancy_support.sql:/docker-entrypoint-initdb.d/10_add_discrepancy_support.sql:ro
 
     healthcheck:
       test:

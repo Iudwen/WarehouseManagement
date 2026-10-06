@@ -1,6 +1,7 @@
 -- =========================================================
 -- CENTRAL DATABASE
 -- 04_create_views.sql
+-- Views cho báo cáo, Dashboard và Data Mining
 -- =========================================================
 
 
@@ -9,19 +10,13 @@
 -- =========================================================
 
 CREATE OR REPLACE VIEW vw_ton_kho_toan_he_thong AS
-
 SELECT
     tk.ma_sp,
-
     sp.ten_sp,
-
     SUM(tk.so_luong) AS tong_ton_kho
-
 FROM ton_kho_central tk
-
 JOIN san_pham sp
     ON tk.ma_sp = sp.ma_sp
-
 GROUP BY
     tk.ma_sp,
     sp.ten_sp;
@@ -32,40 +27,24 @@ GROUP BY
 -- =========================================================
 
 CREATE OR REPLACE VIEW vw_ton_kho_theo_kho AS
-
 SELECT
-
     k.ma_kho,
-
     k.ten_kho,
-
     tk.ma_sp,
-
     sp.ten_sp,
-
     tk.so_luong,
-
     sp.ton_toi_thieu,
-
     sp.ton_an_toan,
-
     CASE
-
         WHEN tk.so_luong < sp.ton_toi_thieu
             THEN 'THIEU'
-
         WHEN tk.so_luong < sp.ton_an_toan
             THEN 'CAN_BO_SUNG'
-
         ELSE 'BINH_THUONG'
-
     END AS trang_thai_ton
-
 FROM ton_kho_central tk
-
 JOIN kho k
     ON tk.ma_kho = k.ma_kho
-
 JOIN san_pham sp
     ON tk.ma_sp = sp.ma_sp;
 
@@ -75,11 +54,8 @@ JOIN san_pham sp
 -- =========================================================
 
 CREATE OR REPLACE VIEW vw_san_pham_ton_thap AS
-
 SELECT *
-
 FROM vw_ton_kho_theo_kho
-
 WHERE so_luong < ton_an_toan;
 
 
@@ -88,18 +64,13 @@ WHERE so_luong < ton_an_toan;
 -- =========================================================
 
 CREATE OR REPLACE VIEW vw_tong_ban_hang AS
-
 SELECT
-
     ma_sp,
-
     SUM(so_luong) AS tong_so_luong_ban,
-
     SUM(thanh_tien) AS tong_doanh_thu
-
-FROM ban_hang_central
-
-GROUP BY ma_sp;
+FROM xuat_hang_central
+GROUP BY
+    ma_sp;
 
 
 -- =========================================================
@@ -107,31 +78,19 @@ GROUP BY ma_sp;
 -- =========================================================
 
 CREATE OR REPLACE VIEW vw_ban_hang_theo_kho AS
-
 SELECT
-
     bh.ma_kho,
-
     k.ten_kho,
-
     bh.ma_sp,
-
     sp.ten_sp,
-
     SUM(bh.so_luong) AS tong_so_luong_ban,
-
     SUM(bh.thanh_tien) AS tong_doanh_thu
-
-FROM ban_hang_central bh
-
+FROM xuat_hang_central bh
 JOIN kho k
     ON bh.ma_kho = k.ma_kho
-
 JOIN san_pham sp
     ON bh.ma_sp = sp.ma_sp
-
 GROUP BY
-
     bh.ma_kho,
     k.ten_kho,
     bh.ma_sp,
@@ -143,31 +102,19 @@ GROUP BY
 -- =========================================================
 
 CREATE OR REPLACE VIEW vw_node_status AS
-
 SELECT
-
     node_name,
-
     ma_kho,
-
     status,
-
     last_check,
-
     last_sync,
-
     CASE
-
         WHEN status = 'ONLINE'
             THEN 'HOAT_DONG'
-
         WHEN status = 'OFFLINE'
             THEN 'MAT_KET_NOI'
-
         ELSE 'UNKNOWN'
-
     END AS trang_thai
-
 FROM node_status;
 
 
@@ -176,27 +123,476 @@ FROM node_status;
 -- =========================================================
 
 CREATE OR REPLACE VIEW vw_demand_forecast AS
-
 SELECT
-
     df.ma_kho,
-
     k.ten_kho,
-
     df.ma_sp,
-
     sp.ten_sp,
-
     df.forecast_date,
-
     df.predicted_quantity,
-
     df.model_name
-
 FROM demand_forecast df
-
 JOIN kho k
     ON df.ma_kho = k.ma_kho
-
 JOIN san_pham sp
     ON df.ma_sp = sp.ma_sp;
+
+
+-- =========================================================
+-- 8. DASHBOARD - TỒN KHO THEO KHO
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_inventory_by_warehouse AS
+SELECT
+    k.ma_kho,
+    k.ten_kho,
+    COALESCE(SUM(tk.so_luong), 0) AS tong_ton,
+    COUNT(tk.ma_sp) AS so_san_pham
+FROM kho k
+LEFT JOIN ton_kho_central tk
+    ON k.ma_kho = tk.ma_kho
+GROUP BY
+    k.ma_kho,
+    k.ten_kho;
+
+
+-- =========================================================
+-- 9. DASHBOARD - TỒN KHO THEO SẢN PHẨM
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_inventory_by_product AS
+SELECT
+    sp.ma_sp,
+    sp.ten_sp,
+    COALESCE(SUM(tk.so_luong), 0) AS tong_ton,
+    COUNT(tk.ma_kho) AS so_kho
+FROM san_pham sp
+LEFT JOIN ton_kho_central tk
+    ON sp.ma_sp = tk.ma_sp
+GROUP BY
+    sp.ma_sp,
+    sp.ten_sp;
+
+
+-- =========================================================
+-- 10. DASHBOARD - NHẬP / XUẤT / ĐIỀU CHUYỂN THEO NGÀY
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_inbound_outbound_daily AS
+
+WITH nhap AS (
+    SELECT
+        ngay_nhap::date AS ngay,
+        SUM(so_luong) AS tong_nhap
+    FROM nhap_hang_central
+    GROUP BY
+        ngay_nhap::date
+),
+
+xuat AS (
+    SELECT
+        ngay_ban::date AS ngay,
+        SUM(so_luong) AS tong_xuat
+    FROM xuat_hang_central
+    GROUP BY
+        ngay_ban::date
+),
+
+vao AS (
+    SELECT
+        ngay,
+        SUM(dieu_chuyen_vao) AS dieu_chuyen_vao
+    FROM lich_su_ton_kho_central
+    GROUP BY
+        ngay
+),
+
+ra AS (
+    SELECT
+        ngay,
+        SUM(dieu_chuyen_ra) AS dieu_chuyen_ra
+    FROM lich_su_ton_kho_central
+    GROUP BY
+        ngay
+),
+
+dates AS (
+    SELECT ngay FROM nhap
+
+    UNION
+
+    SELECT ngay FROM xuat
+
+    UNION
+
+    SELECT ngay FROM vao
+
+    UNION
+
+    SELECT ngay FROM ra
+)
+
+SELECT
+    d.ngay,
+    COALESCE(n.tong_nhap, 0) AS tong_nhap,
+    COALESCE(x.tong_xuat, 0) AS tong_xuat,
+    COALESCE(v.dieu_chuyen_vao, 0) AS dieu_chuyen_vao,
+    COALESCE(r.dieu_chuyen_ra, 0) AS dieu_chuyen_ra
+FROM dates d
+LEFT JOIN nhap n
+    ON d.ngay = n.ngay
+LEFT JOIN xuat x
+    ON d.ngay = x.ngay
+LEFT JOIN vao v
+    ON d.ngay = v.ngay
+LEFT JOIN ra r
+    ON d.ngay = r.ngay;
+
+
+-- =========================================================
+-- 11. DASHBOARD - LỊCH SỬ TỒN KHO THEO NGÀY
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_inventory_daily AS
+SELECT
+    ngay,
+    SUM(ton_dau) AS ton_dau,
+    SUM(nhap) AS nhap,
+    SUM(xuat) AS xuat,
+    SUM(dieu_chuyen_vao) AS dieu_chuyen_vao,
+    SUM(dieu_chuyen_ra) AS dieu_chuyen_ra,
+    SUM(ton_cuoi) AS ton_cuoi
+FROM lich_su_ton_kho_central
+GROUP BY
+    ngay
+ORDER BY
+    ngay;
+
+
+-- =========================================================
+-- 12. DASHBOARD - TRẠNG THÁI NODE
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_node_status AS
+SELECT
+    ns.node_name,
+    ns.ma_kho,
+    k.ten_kho,
+    ns.host,
+    ns.port,
+    ns.status,
+    ns.last_check,
+    ns.last_sync,
+    ns.error_message,
+    CASE
+        WHEN ns.status = 'ONLINE'
+            THEN 'HOAT_DONG'
+        WHEN ns.status = 'OFFLINE'
+            THEN 'MAT_KET_NOI'
+        ELSE 'UNKNOWN'
+    END AS trang_thai
+FROM node_status ns
+LEFT JOIN kho k
+    ON ns.ma_kho = k.ma_kho;
+
+
+-- =========================================================
+-- 13. DASHBOARD - TRẠNG THÁI ĐỒNG BỘ
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_sync_status AS
+SELECT
+    sl.id,
+    sl.node_name,
+    k.ten_kho,
+    sl.sync_type,
+    sl.started_at,
+    sl.finished_at,
+    sl.records_processed,
+    sl.records_success,
+    sl.records_failed,
+    sl.status,
+    sl.error_message
+FROM sync_log sl
+LEFT JOIN kho k
+    ON sl.node_name = k.node_name;
+
+
+-- =========================================================
+-- 14. DASHBOARD - KHUYẾN NGHỊ ĐIỀU CHUYỂN
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_transfer_recommendation AS
+SELECT
+    tr.id,
+    tr.ma_sp,
+    sp.ten_sp,
+    tr.kho_xuat,
+    kx.ten_kho AS ten_kho_xuat,
+    tr.kho_nhap,
+    kn.ten_kho AS ten_kho_nhap,
+    tr.current_quantity_source,
+    tr.current_quantity_destination,
+    tr.predicted_demand_destination,
+    tr.recommended_quantity,
+    tr.reason,
+    tr.model_name,
+    tr.created_at,
+    tr.status
+FROM transfer_recommendation tr
+JOIN san_pham sp
+    ON tr.ma_sp = sp.ma_sp
+LEFT JOIN kho kx
+    ON tr.kho_xuat = kx.ma_kho
+LEFT JOIN kho kn
+    ON tr.kho_nhap = kn.ma_kho;
+
+
+-- =========================================================
+-- 15. DASHBOARD - DỰ BÁO NHU CẦU
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_demand_forecast AS
+SELECT
+    df.ma_kho,
+    k.ten_kho,
+    df.ma_sp,
+    sp.ten_sp,
+    df.forecast_date,
+    df.predicted_quantity,
+    df.model_name
+FROM demand_forecast df
+JOIN kho k
+    ON df.ma_kho = k.ma_kho
+JOIN san_pham sp
+    ON df.ma_sp = sp.ma_sp;
+
+
+-- =========================================================
+-- 16. DASHBOARD - SAGA MONITORING
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_saga_monitoring AS
+SELECT
+    sm.id,
+    sm.saga_id,
+    sm.ma_giao_dich_global,
+    sm.ma_phieu_dc,
+
+    sm.kho_xuat,
+    kx.ten_kho AS ten_kho_xuat,
+
+    sm.kho_nhap,
+    kn.ten_kho AS ten_kho_nhap,
+
+    sm.ma_sp,
+    sp.ten_sp,
+
+    sm.so_luong_yeu_cau,
+    sm.so_luong_da_xuat,
+    sm.so_luong_thuc_nhan,
+    sm.so_luong_chenh_lech,
+
+    sm.current_state,
+    sm.status,
+
+    sm.source_node,
+    sm.destination_node,
+
+    sm.last_event_type,
+    sm.last_event_at,
+
+    sm.source_confirm_deadline,
+    sm.ship_deadline,
+    sm.receive_deadline,
+
+    sm.created_at,
+    sm.updated_at,
+    sm.error_message
+
+FROM saga_monitoring sm
+
+LEFT JOIN kho kx
+    ON sm.kho_xuat = kx.ma_kho
+
+LEFT JOIN kho kn
+    ON sm.kho_nhap = kn.ma_kho
+
+LEFT JOIN san_pham sp
+    ON sm.ma_sp = sp.ma_sp;
+
+
+-- =========================================================
+-- 17. DASHBOARD - VIRTUAL WAREHOUSE
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_virtual_warehouse AS
+SELECT
+    vw.vwh_id,
+    vw.saga_id,
+    vw.ma_phieu_dc,
+    vw.ma_sp,
+    sp.ten_sp,
+    vw.kho_xuat,
+    vw.kho_nhap,
+    vw.so_luong_xuat,
+    vw.so_luong_da_nhan,
+    vw.so_luong_dang_van_chuyen,
+    vw.trang_thai,
+    vw.created_at,
+    vw.updated_at,
+    vw.received_at
+FROM vwh_transfer vw
+LEFT JOIN san_pham sp
+    ON vw.ma_sp = sp.ma_sp;
+
+
+-- =========================================================
+-- 18. DASHBOARD - CHÊNH LỆCH ĐIỀU CHUYỂN
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_transfer_discrepancy AS
+SELECT
+    td.discrepancy_id,
+    td.saga_id,
+    td.ma_phieu_dc,
+    td.ma_sp,
+    sp.ten_sp,
+    td.kho_xuat,
+    td.kho_nhap,
+    td.so_luong_xuat,
+    td.so_luong_thuc_nhan,
+    td.so_luong_chenh_lech,
+    td.ly_do,
+    td.huong_xu_ly,
+    td.trang_thai,
+    td.created_at,
+    td.resolved_at,
+    td.resolved_by,
+    td.resolution_note
+FROM transfer_discrepancy td
+LEFT JOIN san_pham sp
+    ON td.ma_sp = sp.ma_sp;
+
+
+-- =========================================================
+-- 19. DASHBOARD - CẢNH BÁO TỒN KHO
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_inventory_alert AS
+SELECT
+    k.ma_kho,
+    k.ten_kho,
+    sp.ma_sp,
+    sp.ten_sp,
+    tk.so_luong,
+    sp.ton_toi_thieu,
+    sp.ton_an_toan AS muc_canh_bao,
+
+    CASE
+        WHEN tk.so_luong < sp.ton_toi_thieu
+            THEN 'THIEU_NGHIEM_TRONG'
+        WHEN tk.so_luong < sp.ton_an_toan
+            THEN 'CAN_BO_SUNG'
+        ELSE 'BINH_THUONG'
+    END AS trang_thai
+
+FROM ton_kho_central tk
+
+JOIN kho k
+    ON tk.ma_kho = k.ma_kho
+
+JOIN san_pham sp
+    ON tk.ma_sp = sp.ma_sp
+
+WHERE tk.so_luong < sp.ton_an_toan;
+
+
+-- =========================================================
+-- 20. DASHBOARD - KPI TỔNG QUAN
+-- =========================================================
+
+CREATE OR REPLACE VIEW v_dashboard_kpi AS
+SELECT
+
+    (
+        SELECT COUNT(*)
+        FROM kho
+    ) AS tong_so_kho,
+
+    (
+        SELECT COUNT(*)
+        FROM san_pham
+    ) AS tong_so_san_pham,
+
+    (
+        SELECT COALESCE(SUM(so_luong), 0)
+        FROM ton_kho_central
+    ) AS tong_so_luong_ton,
+
+    (
+        SELECT COALESCE(SUM(so_luong), 0)
+        FROM nhap_hang_central
+    ) AS tong_so_luong_nhap,
+
+    (
+        SELECT COALESCE(SUM(so_luong), 0)
+        FROM xuat_hang_central
+    ) AS tong_so_luong_xuat,
+
+    (
+        SELECT COUNT(*)
+        FROM node_status
+        WHERE status = 'ONLINE'
+    ) AS so_node_online,
+
+    (
+        SELECT COUNT(*)
+        FROM node_status
+        WHERE status = 'OFFLINE'
+    ) AS so_node_offline,
+
+    (
+        SELECT COUNT(*)
+        FROM transfer_recommendation
+    ) AS tong_khuyen_nghi_dieu_chuyen,
+
+    (
+        SELECT COUNT(*)
+        FROM transfer_recommendation
+        WHERE status = 'APPROVED'
+    ) AS so_khuyen_nghi_da_duyet,
+
+    (
+        SELECT COUNT(*)
+        FROM transfer_discrepancy
+        WHERE trang_thai <> 'RESOLVED'
+    ) AS so_chenh_lech_chua_xu_ly,
+
+    (
+        SELECT COUNT(*)
+        FROM saga_transaction
+        WHERE status <> 'SUCCESS'
+    ) AS so_saga_chua_hoan_tat,
+
+    (
+        SELECT COUNT(*)
+        FROM nguoi_dung
+        WHERE trang_thai = 'ACTIVE'
+    ) AS so_nguoi_dung_active;
+
+
+-- =========================================================
+-- 21. KIỂM TRA DANH SÁCH VIEW
+-- =========================================================
+
+SELECT
+    table_name AS view_name
+FROM information_schema.views
+WHERE table_schema = 'public'
+  AND (
+        table_name LIKE 'vw_%'
+        OR table_name LIKE 'v_dashboard_%'
+      )
+ORDER BY
+    table_name;

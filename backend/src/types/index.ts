@@ -5,7 +5,7 @@ export interface UserPayload {
   ma_nguoi_dung: string;
   email: string;
   ho_ten: string;
-  vai_tro: 'ADMIN' | 'MANAGER' | 'STAFF';
+  vai_tro: 'ADMIN' | 'MANAGER' | 'STAFF' | 'DIEU_PHOI' | 'DATA_ANALYST';
   ma_kho: string | null; // NULL đối với tài khoản ADMIN quản lý toàn quốc
 }
 
