@@ -6,8 +6,10 @@ ALTER TABLE phieu_dieu_chuyen
   ADD COLUMN IF NOT EXISTS so_luong_thuc_nhan INT DEFAULT NULL,
   ADD COLUMN IF NOT EXISTS ly_do_thieu TEXT DEFAULT NULL;
 
+
 -- 2. Xóa chữ ký 6 tham số cũ
 DROP FUNCTION IF EXISTS sp_receive_transfer(UUID, UUID, VARCHAR, VARCHAR, VARCHAR, INT);
+
 
 -- 3. Tạo Stored Function sp_receive_transfer chuẩn 8 tham số
 CREATE OR REPLACE FUNCTION sp_receive_transfer(
@@ -16,9 +18,9 @@ CREATE OR REPLACE FUNCTION sp_receive_transfer(
     p_ma_phieu_dc VARCHAR,
     p_ma_kho VARCHAR,
     p_ma_sp VARCHAR,
-    p_so_luong INT,                       -- Số lượng yêu cầu (20)
-    p_so_luong_thuc_nhan INT DEFAULT NULL, -- Số lượng thực nhận (18)
-    p_ly_do_thieu TEXT DEFAULT NULL        -- Lý do thiếu nếu có
+    p_so_luong INT,
+    p_so_luong_thuc_nhan INT DEFAULT NULL,
+    p_ly_do_thieu TEXT DEFAULT NULL
 ) RETURNS VOID AS $$
 DECLARE
     v_so_luong_nhan INT;
@@ -27,7 +29,7 @@ DECLARE
     v_kho_xuat VARCHAR;
 BEGIN
     -- Lock dòng phiếu điều chuyển
-    SELECT trang_thai, kho_xuat 
+    SELECT trang_thai, kho_xuat
     INTO v_trang_thai_phieu, v_kho_xuat
     FROM phieu_dieu_chuyen
     WHERE ma_phieu_dc = p_ma_phieu_dc
@@ -50,35 +52,54 @@ BEGIN
     END IF;
 
     IF v_so_luong_nhan > p_so_luong THEN
-        RAISE EXCEPTION 'Số lượng thực nhận (%) không được lớn hơn số lượng yêu cầu (%)', v_so_luong_nhan, p_so_luong;
+        RAISE EXCEPTION
+            'Số lượng thực nhận (%) không được lớn hơn số lượng yêu cầu (%)',
+            v_so_luong_nhan,
+            p_so_luong;
     END IF;
 
-    IF v_so_luong_thieu > 0 AND (p_ly_do_thieu IS NULL OR trim(p_ly_do_thieu) = '') THEN
-        RAISE EXCEPTION 'Bắt buộc phải nhập lý do thiếu khi số lượng thực nhận không đủ';
+    IF v_so_luong_thieu > 0
+       AND (p_ly_do_thieu IS NULL OR trim(p_ly_do_thieu) = '') THEN
+        RAISE EXCEPTION
+            'Bắt buộc phải nhập lý do thiếu khi số lượng thực nhận không đủ';
     END IF;
+
 
     -- 1. Cập nhật bảng phieu_dieu_chuyen
     UPDATE phieu_dieu_chuyen
     SET trang_thai = 'DA_NHAN',
         so_luong_thuc_nhan = v_so_luong_nhan,
-        ly_do_thieu = p_ly_do_thieu,
-        ngay_nhan = CURRENT_TIMESTAMP
+        ly_do_thieu = p_ly_do_thieu
     WHERE ma_phieu_dc = p_ma_phieu_dc;
 
-    -- 2. Cộng số lượng thực nhận vào tồn kho (ton_kho)
+
+    -- 2. Cộng số lượng thực nhận vào tồn kho
     UPDATE ton_kho
     SET so_luong = so_luong + v_so_luong_nhan
-    WHERE ma_kho = p_ma_kho AND ma_sp = p_ma_sp;
+    WHERE ma_kho = p_ma_kho
+      AND ma_sp = p_ma_sp;
+
 
     -- 3. Phân nhánh phát sinh Outbox Event
+
     IF v_so_luong_thieu = 0 THEN
-        -- HAPPY PATH: Nhận đủ (20/20)
-        INSERT INTO outbox_event (event_id, aggregate_type, aggregate_id, event_type, payload, status)
+
+        -- HAPPY PATH: Nhận đủ
+        INSERT INTO outbox_event (
+            event_id,
+            saga_id,
+            ma_giao_dich_global,
+            event_type,
+            aggregate_id,
+            payload,
+            status
+        )
         VALUES (
             gen_random_uuid(),
-            'TRANSFER',
-            p_ma_phieu_dc,
+            p_saga_id,
+            p_global_id,
             'TRANSFER_COMPLETED',
+            p_ma_phieu_dc,
             json_build_object(
                 'saga_id', p_saga_id,
                 'global_id', p_global_id,
@@ -90,14 +111,25 @@ BEGIN
             ),
             'PENDING'
         );
+
     ELSE
-        -- DISCREPANCY PATH: Nhận thiếu (18/20)
-        INSERT INTO outbox_event (event_id, aggregate_type, aggregate_id, event_type, payload, status)
+
+        -- DISCREPANCY PATH: Nhận thiếu
+        INSERT INTO outbox_event (
+            event_id,
+            saga_id,
+            ma_giao_dich_global,
+            event_type,
+            aggregate_id,
+            payload,
+            status
+        )
         VALUES (
             gen_random_uuid(),
-            'TRANSFER',
-            p_ma_phieu_dc,
+            p_saga_id,
+            p_global_id,
             'TRANSFER_COMPLETED_WITH_DISCREPANCY',
+            p_ma_phieu_dc,
             json_build_object(
                 'saga_id', p_saga_id,
                 'global_id', p_global_id,
@@ -112,6 +144,8 @@ BEGIN
             ),
             'PENDING'
         );
+
     END IF;
+
 END;
 $$ LANGUAGE plpgsql;

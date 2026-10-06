@@ -3,6 +3,8 @@ import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 
+import { startDiscrepancyOutboxWorker } from './messaging/discrepancyOutboxWorker';
+
 import authRoutes from './routes/authRoutes';
 import inventoryRoutes from './routes/inventoryRoutes';
 import transferRoutes from './routes/transferRoutes';
@@ -57,6 +59,11 @@ app.use(
     });
   }
 );
+
+// Task 3.9:
+// Worker đọc outbox_event tại các node và chuyển
+// TRANSFER_COMPLETED_WITH_DISCREPANCY về Central.
+startDiscrepancyOutboxWorker();
 
 const PORT = process.env.PORT || 5000;
 
