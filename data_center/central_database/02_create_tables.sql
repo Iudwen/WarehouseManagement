@@ -328,10 +328,10 @@ CREATE TABLE IF NOT EXISTS lich_su_ton_kho_central (
 
 
 -- =========================================================
--- 7. BÁN HÀNG TỔNG HỢP
+-- 7. XUẤT HÀNG TỔNG HỢP
 -- =========================================================
 
-CREATE TABLE IF NOT EXISTS ban_hang_central (
+CREATE TABLE IF NOT EXISTS xuat_hang_central (
     id BIGSERIAL PRIMARY KEY,
 
     ma_phieu_xuat VARCHAR(20),
@@ -340,7 +340,7 @@ CREATE TABLE IF NOT EXISTS ban_hang_central (
 
     ma_sp VARCHAR(20),
 
-    ngay_ban TIMESTAMP,
+    ngay_xuat TIMESTAMP,
 
     so_luong INT,
 
@@ -354,6 +354,14 @@ CREATE TABLE IF NOT EXISTS ban_hang_central (
         DEFAULT CURRENT_TIMESTAMP
 );
 
+-- UNIQUE KEY phục vụ đồng bộ dữ liệu xuất hàng
+CREATE UNIQUE INDEX IF NOT EXISTS uq_xuat_hang_central_key
+ON xuat_hang_central(
+    ma_phieu_xuat,
+    ma_kho,
+    ma_sp,
+    source_node
+);
 
 -- =========================================================
 -- 8. NHẬP HÀNG TỔNG HỢP
@@ -604,7 +612,48 @@ DO UPDATE SET
     trang_thai = 'ONLINE',
     dong_bo_luc = CURRENT_TIMESTAMP;
 
+-- ============================================================
+-- PROCESSED_EVENT
+-- Theo dõi các event CDC đã được xử lý tại CENTRAL
+-- Phục vụ Debezium / Kafka / ETL
+-- ============================================================
 
+CREATE TABLE IF NOT EXISTS processed_event (
+
+    event_id UUID PRIMARY KEY,
+
+    source_node VARCHAR(50) NOT NULL,
+
+    event_type VARCHAR(100) NOT NULL,
+
+    processed_at TIMESTAMP NOT NULL
+        DEFAULT CURRENT_TIMESTAMP,
+
+    status VARCHAR(20) NOT NULL
+        DEFAULT 'SUCCESS',
+
+    error_message TEXT,
+
+    CONSTRAINT chk_processed_event_status
+        CHECK (
+            status IN (
+                'SUCCESS',
+                'FAILED'
+            )
+        )
+);
+
+CREATE INDEX IF NOT EXISTS idx_processed_event_source
+ON processed_event(source_node);
+
+CREATE INDEX IF NOT EXISTS idx_processed_event_type
+ON processed_event(event_type);
+
+CREATE INDEX IF NOT EXISTS idx_processed_event_processed_at
+ON processed_event(processed_at);
+
+CREATE INDEX IF NOT EXISTS idx_processed_event_status
+ON processed_event(status);
 -- =========================================================
 -- 15. DỮ LIỆU KHO MẶC ĐỊNH
 -- =========================================================
