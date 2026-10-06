@@ -1,36 +1,37 @@
-import React, { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import api from '../services/api';
 import { useWarehouse } from '../contexts/WarehouseContext';
-import type { StockItem, MongoEventLog, LowStockAlert } from '../types';
+import { getApiErrorMessage } from '../services/apiError';
+import type { StockItem, LowStockAlert } from '../types';
 import { Package, ArrowDownLeft, ArrowUpRight, AlertTriangle } from 'lucide-react';
 
 export default function Dashboard() {
   const { selectedWarehouse } = useWarehouse();
   const [stocks, setStocks] = useState<StockItem[]>([]);
-  const [logs, setLogs] = useState<MongoEventLog[]>([]);
   const [alerts, setAlerts] = useState<LowStockAlert[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
-  const fetchDashboardData = async () => {
+  const fetchDashboardData = useCallback(async () => {
     setLoading(true);
+    setError('');
     try {
       const [resSummary, resAlerts] = await Promise.all([
         api.get(`/dashboard/summary?ma_kho=${selectedWarehouse}`),
         api.get(`/alerts/low-stock?ma_kho=${selectedWarehouse}`),
       ]);
       setStocks(resSummary.data.stocks || resSummary.data.san_pham || []);
-      setLogs(resSummary.data.recentLogs || []);
       setAlerts(resAlerts.data.alerts || []);
-    } catch (err) {
-      console.error('Lỗi load Dashboard:', err);
+    } catch (err: unknown) {
+      setError(getApiErrorMessage(err, 'Không thể tải dữ liệu Dashboard.'));
     } finally {
       setLoading(false);
     }
-  };
+  }, [selectedWarehouse]);
 
   useEffect(() => {
     fetchDashboardData();
-  }, [selectedWarehouse]);
+  }, [fetchDashboardData]);
 
   const totalQty = stocks.reduce((acc, item) => acc + item.so_luong, 0);
 
@@ -51,6 +52,15 @@ export default function Dashboard() {
           🔄 Làm mới dữ liệu
         </button>
       </div>
+
+      {error && (
+        <div className="flex items-center justify-between gap-4 rounded-lg border border-rose-200 bg-rose-50 p-3 text-sm text-rose-700">
+          <span>{error}</span>
+          <button onClick={fetchDashboardData} className="font-semibold underline">
+            Thử lại
+          </button>
+        </div>
+      )}
 
       {/* Top 4 KPI Stat Cards */}
       <div className="grid grid-cols-4 gap-5">

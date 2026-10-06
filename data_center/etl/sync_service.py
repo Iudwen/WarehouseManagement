@@ -1,14 +1,15 @@
 import psycopg
 import time
+import os
 from datetime import datetime
-
 
 # ============================================================
 # CẤU HÌNH
 # ============================================================
 
-DB_USER = "admin"
-DB_PASSWORD = "admin123"
+DB_USER = os.getenv("DB_USER", "admin")
+DB_PASSWORD = os.getenv("DB_PASSWORD")
+
 
 # Đồng bộ mỗi 5 phút
 SYNC_INTERVAL = 300
@@ -158,11 +159,7 @@ def get_purchase_receipts(node_conn):
         INNER JOIN ct_phieu_nhap ct
             ON pn.ma_phieu_nhap = ct.ma_phieu_nhap
 
-        WHERE pn.trang_thai IN (
-            'CHO_NHAP',
-            'DA_NHAP',
-            'HOAN_THANH'
-        )
+        WHERE pn.trang_thai = 'COMPLETED'
 
         ORDER BY
             pn.ngay_nhap,
@@ -222,6 +219,13 @@ def sync_warehouses(
     node_config
 ):
 
+    owned_warehouse_by_node = {
+        "NODE_HN": "HN01",
+        "NODE_DN": "DN01",
+        "NODE_HCM": "HCM01",
+    }
+    owned_warehouse = owned_warehouse_by_node.get(node_config["node_name"])
+
     sql = """
         INSERT INTO kho (
             ma_kho,
@@ -263,6 +267,9 @@ def sync_warehouses(
     with central_conn.cursor() as cursor:
 
         for warehouse in warehouses:
+
+            if owned_warehouse and warehouse[0] != owned_warehouse:
+                continue
 
             cursor.execute(
                 sql,

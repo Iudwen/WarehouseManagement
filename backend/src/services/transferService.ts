@@ -1,5 +1,13 @@
-import { getDbPool } from '../config/postgresql';
-import { logTransferEvent } from './eventLogger';
+import { pools } from '../config/postgresql';
+import { UserPayload } from '../types';
+import {
+  AcceptTransferCommand,
+  ReceiveTransferCommand,
+  ShipTransferCommand,
+  acceptTransferAtNode,
+  receiveTransferAtNode,
+  shipTransferAtNode,
+} from './nodeTransferProcedureAdapter';
 
 export interface TransferPayload {
   ma_phieu_dc: string;
@@ -8,93 +16,412 @@ export interface TransferPayload {
   items: Array<{ ma_sp: string; so_luong: number }>;
 }
 
-export const processTransfer = async (payload: TransferPayload) => {
-  const { ma_phieu_dc, kho_xuat, kho_nhap, items } = payload;
-  
-  const poolExport = getDbPool(kho_xuat);
-  const poolImport = getDbPool(kho_nhap);
+export interface SagaTransferContext {
+  saga_id: string;
+  global_id: string | null;
+  ma_phieu_dc: string;
+  kho_xuat: string;
+  kho_nhap: string;
+  ma_sp: string;
+  so_luong_yeu_cau: number;
+  current_state: string;
+  status: string;
+}
 
-  const clientExport = await poolExport.connect();
-  const clientImport = await poolImport.connect();
+export interface DiscrepancyOptions {
+  so_luong_thuc_nhan?: number;
+  ly_do_thieu?: string;
+}
+
+type SourceConfirmationActor = Pick<
+  UserPayload,
+  'ma_nguoi_dung' | 'vai_tro' | 'ma_kho'
+>;
+
+export interface SourceConfirmationDependencies {
+  loadSagaContext: (maPhieuDc: string) => Promise;
+  acceptTransfer: (command: AcceptTransferCommand) => Promise;
+}
+
+type SourceShipmentActor = Pick<
+  UserPayload,
+  'ma_nguoi_dung' | 'vai_tro' | 'ma_kho'
+>;
+
+export interface SourceShipmentDependencies {
+  loadSagaContext: (maPhieuDc: string) => Promise;
+  shipTransfer: (command: ShipTransferCommand) => Promise;
+}
+
+type DestinationReceivingActor = Pick<
+  UserPayload,
+  'ma_nguoi_dung' | 'vai_tro' | 'ma_kho'
+>;
+
+export interface DestinationReceivingDependencies {
+  loadSagaContext: (maPhieuDc: string) => Promise;
+  receiveTransfer: (command: ReceiveTransferCommand) => Promise;
+}
+
+const nodeByWarehouse: Record = {
+  HN01: 'NODE_HN',
+  DN01: 'NODE_DN',
+  HCM01: 'NODE_HCM',
+};
+
+const validateTransfer = (payload: TransferPayload, userKho?: string, userRole?: string): void => {
+  const { ma_phieu_dc, kho_xuat, kho_nhap, items } = payload;
+  const normalizedSource = kho_xuat?.trim().toUpperCase();
+  const normalizedDestination = kho_nhap?.trim().toUpperCase();
+
+  if (!ma_phieu_dc || ma_phieu_dc.length > 20) {
+    throw new Error('Mã phiếu điều chuyển phải có từ 1 đến 20 ký tự');
+  }
+
+  if (!items || items.length !== 1) {
+    throw new Error('Mỗi yêu cầu điều chuyển hiện chỉ hỗ trợ một sản phẩm');
+  }
+
+  if (!nodeByWarehouse[normalizedSource] || !nodeByWarehouse[normalizedDestination]) {
+    throw new Error('Kho xuất hoặc kho nhập không hợp lệ');
+  }
+
+  if (normalizedSource === normalizedDestination) {
+    throw new Error('Kho xuất và Kho nhập không được trùng nhau');
+  }
+
+  if (!items[0].ma_sp || items[0].so_luong <= 0) {
+    throw new Error('Sản phẩm và số lượng điều chuyển phải hợp lệ');
+  }
+
+  if (userRole !== 'ADMIN' && userKho?.toUpperCase() !== normalizedSource) {
+    throw new Error(`Tài khoản thuộc kho \({userKho}, không có quyền xuất hàng từ kho\){normalizedSource}`);
+  }
+};
+
+export const processTransfer = async (
+  payload: TransferPayload,
+  userKho?: string,
+  userRole?: string,
+) => {
+  validateTransfer(payload, userKho, userRole);
+
+  const sourceWarehouse = payload.kho_xuat.trim().toUpperCase();
+  const destinationWarehouse = payload.kho_nhap.trim().toUpperCase();
+  const client = await pools.CENTRAL.connect();
 
   try {
-    // Phase 1: Mở Transaction TRÊN CẢ 2 NODE cùng lúc
-    await clientExport.query('BEGIN');
-    await clientImport.query('BEGIN');
-
-    // 1. Kiểm tra & Trừ kho tại Node Xuất (Lock dòng với FOR UPDATE)
-    for (const item of items) {
-      const res = await clientExport.query(
-        `SELECT so_luong FROM ton_kho WHERE ma_kho = $1 AND ma_sp = $2 FOR UPDATE`,
-        [kho_xuat, item.ma_sp]
-      );
-      const currentStock = res.rows[0]?.so_luong || 0;
-      if (currentStock < item.so_luong) {
-        throw new Error(`Kho xuất ${kho_xuat} không đủ hàng ${item.ma_sp} (Hiện có: ${currentStock})`);
-      }
-
-      await clientExport.query(
-        `UPDATE ton_kho SET so_luong = so_luong - $1, cap_nhat_luc = NOW() 
-         WHERE ma_kho = $2 AND ma_sp = $3`,
-        [item.so_luong, kho_xuat, item.ma_sp]
-      );
-
-      await clientExport.query(
-        `INSERT INTO lich_su_ton_kho (ma_kho, ma_sp, ngay, dieu_chuyen_ra) 
-         VALUES ($1, $2, CURRENT_DATE, $3)
-         ON CONFLICT (ma_kho, ma_sp, ngay) 
-         DO UPDATE SET dieu_chuyen_ra = lich_su_ton_kho.dieu_chuyen_ra + EXCLUDED.dieu_chuyen_ra`,
-        [kho_xuat, item.ma_sp, item.so_luong]
-      );
-    }
-
-    await clientExport.query(
-      `INSERT INTO phieu_dieu_chuyen (ma_phieu_dc, kho_xuat, kho_nhap, ngay_dieu_chuyen, trang_thai)
-       VALUES ($1, $2, $3, NOW(), 'COMPLETED')`,
-      [ma_phieu_dc, kho_xuat, kho_nhap]
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO dieu_chuyen_central
+        (ma_phieu_dc, kho_xuat, kho_nhap, ma_sp, so_luong, ngay_dieu_chuyen, trang_thai, source_node)
+       VALUES ($1, $2, $3, $4, $5, NOW(), 'PENDING', $6)`,
+      [
+        payload.ma_phieu_dc,
+        sourceWarehouse,
+        destinationWarehouse,
+        payload.items[0].ma_sp,
+        payload.items[0].so_luong,
+        nodeByWarehouse[sourceWarehouse],
+      ],
     );
+    await client.query('COMMIT');
 
-    for (const item of items) {
-      await clientExport.query(
-        `INSERT INTO ct_dieu_chuyen (ma_phieu_dc, ma_sp, so_luong) VALUES ($1, $2, $3)`,
-        [ma_phieu_dc, item.ma_sp, item.so_luong]
-      );
-    }
-
-    // 2. Cộng kho tại Node Nhập
-    for (const item of items) {
-      await clientImport.query(
-        `INSERT INTO ton_kho (ma_kho, ma_sp, so_luong, cap_nhat_luc)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (ma_kho, ma_sp) 
-         DO UPDATE SET so_luong = ton_kho.so_luong + EXCLUDED.so_luong, cap_nhat_luc = NOW()`,
-        [kho_nhap, item.ma_sp, item.so_luong]
-      );
-
-      await clientImport.query(
-        `INSERT INTO lich_su_ton_kho (ma_kho, ma_sp, ngay, dieu_chuyen_vao) 
-         VALUES ($1, $2, CURRENT_DATE, $3)
-         ON CONFLICT (ma_kho, ma_sp, ngay) 
-         DO UPDATE SET dieu_chuyen_vao = lich_su_ton_kho.dieu_chuyen_vao + EXCLUDED.dieu_chuyen_vao`,
-        [kho_nhap, item.ma_sp, item.so_luong]
-      );
-    }
-
-    // Phase 2: Cả 2 Node OK mới tiến hành COMMIT
-    await clientExport.query('COMMIT');
-    await clientImport.query('COMMIT');
-
-    // 3. Đẩy Event log sang Mongo
-    logTransferEvent({ ma_phieu_dc, kho_xuat, kho_nhap, items });
-
-    return { success: true, ma_phieu_dc };
+    return {
+      success: true,
+      ma_phieu_dc: payload.ma_phieu_dc,
+      trang_thai: 'PENDING',
+    };
   } catch (error) {
-    // Nếu có bất kỳ lỗi nào, ROLLBACK CẢ 2 NODE an toàn 100%
-    await clientExport.query('ROLLBACK');
-    await clientImport.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw error;
   } finally {
-    clientExport.release();
-    clientImport.release();
+    client.release();
   }
+};
+
+export const approveTransfer = async (maPhieuDc: string) => {
+  const client = await pools.CENTRAL.connect();
+
+  try {
+    await client.query('BEGIN');
+    const result = await client.query<{ trang_thai: string }>(
+      `SELECT trang_thai
+       FROM dieu_chuyen_central
+       WHERE ma_phieu_dc = $1
+       FOR UPDATE`,
+      [maPhieuDc],
+    );
+
+    if (!result.rows[0]) {
+      throw new Error('Không tìm thấy yêu cầu điều chuyển');
+    }
+
+    if (result.rows[0].trang_thai !== 'PENDING') {
+      throw new Error(`Yêu cầu đang ở trạng thái ${result.rows[0].trang_thai}`);
+    }
+
+    const saga = await client.query<{ saga_id: string }>(
+      `SELECT sp_create_saga($1) AS saga_id`,
+      [maPhieuDc],
+    );
+    await client.query('COMMIT');
+
+    return {
+      success: true,
+      ma_phieu_dc: maPhieuDc,
+      saga_id: saga.rows[0].saga_id,
+      trang_thai: 'DANG_XU_LY',
+    };
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
+  }
+};
+
+const loadSagaContext = async (maPhieuDc: string): Promise => {
+  const result = await pools.CENTRAL.query(
+    `SELECT
+       saga_id,
+       ma_giao_dich_global AS global_id,
+       ma_phieu_dc,
+       kho_xuat,
+       kho_nhap,
+       ma_sp,
+       so_luong_yeu_cau,
+       current_state,
+       status
+     FROM saga_transaction
+     WHERE ma_phieu_dc = $1`,
+    [maPhieuDc],
+  );
+
+  return result.rows[0] || null;
+};
+
+const defaultSourceConfirmationDependencies: SourceConfirmationDependencies = {
+  loadSagaContext,
+  acceptTransfer: acceptTransferAtNode,
+};
+
+export const confirmSourceTransfer = async (
+  maPhieuDc: string,
+  actor: SourceConfirmationActor,
+  dependencies: SourceConfirmationDependencies = defaultSourceConfirmationDependencies,
+) => {
+  const sagaContext = await dependencies.loadSagaContext(maPhieuDc);
+
+  if (!sagaContext) {
+    throw new Error(`Không tìm thấy Saga cho phiếu ${maPhieuDc}`);
+  }
+
+  if (!sagaContext.global_id) {
+    throw new Error(`Saga của phiếu ${maPhieuDc} thiếu ma_giao_dich_global`);
+  }
+
+  if (sagaContext.status !== 'RUNNING') {
+    throw new Error(`Saga đang ở trạng thái ${sagaContext.status}, không thể xác nhận kho nguồn`);
+  }
+
+  if (sagaContext.current_state !== 'WAITING_SOURCE_CONFIRMATION') {
+    throw new Error(
+      `Saga đang ở state ${sagaContext.current_state}, không thể xác nhận kho nguồn`,
+    );
+  }
+
+  if (
+    actor.vai_tro !== 'ADMIN' &&
+    (!actor.ma_kho || actor.ma_kho.toUpperCase() !== sagaContext.kho_xuat.toUpperCase())
+  ) {
+    throw new Error(
+      `Tài khoản thuộc kho \({actor.ma_kho}, không có quyền xác nhận kho nguồn\){sagaContext.kho_xuat}`,
+    );
+  }
+
+  const command: AcceptTransferCommand = {
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    ma_kho: sagaContext.kho_xuat,
+    ma_sp: sagaContext.ma_sp,
+    so_luong: sagaContext.so_luong_yeu_cau,
+  };
+
+  await dependencies.acceptTransfer(command);
+
+  return {
+    success: true,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_kho: sagaContext.kho_xuat,
+    event_type: 'TRANSFER_ACCEPTED',
+  };
+};
+
+const defaultSourceShipmentDependencies: SourceShipmentDependencies = {
+  loadSagaContext,
+  shipTransfer: shipTransferAtNode,
+};
+
+/**
+ * Task 3.5: Lệnh xuất hàng tại kho nguồn (Source Shipment)
+ */
+export const shipSourceTransfer = async (
+  maPhieuDc: string,
+  actor: SourceShipmentActor,
+  dependencies: SourceShipmentDependencies = defaultSourceShipmentDependencies,
+) => {
+  const sagaContext = await dependencies.loadSagaContext(maPhieuDc);
+
+  if (!sagaContext) {
+    throw new Error(`Không tìm thấy Saga cho phiếu ${maPhieuDc}`);
+  }
+
+  if (!sagaContext.global_id) {
+    throw new Error(`Saga của phiếu ${maPhieuDc} thiếu ma_giao_dich_global`);
+  }
+
+  if (sagaContext.status !== 'RUNNING') {
+    throw new Error(`Saga đang ở trạng thái ${sagaContext.status}, không thể thực hiện xuất hàng`);
+  }
+
+  if (sagaContext.current_state !== 'SOURCE_ACCEPTED') {
+    throw new Error(
+      `Saga đang ở state ${sagaContext.current_state}, không thể thực hiện xuất hàng`,
+    );
+  }
+
+  if (
+    actor.vai_tro !== 'ADMIN' &&
+    (!actor.ma_kho || actor.ma_kho.toUpperCase() !== sagaContext.kho_xuat.toUpperCase())
+  ) {
+    throw new Error(
+      `Tài khoản thuộc kho \({actor.ma_kho}, không có quyền xuất hàng từ kho nguồn\){sagaContext.kho_xuat}`,
+    );
+  }
+
+  const command: ShipTransferCommand = {
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    ma_kho: sagaContext.kho_xuat,
+    ma_sp: sagaContext.ma_sp,
+    so_luong: sagaContext.so_luong_yeu_cau,
+  };
+
+  await dependencies.shipTransfer(command);
+
+  return {
+    success: true,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_kho: sagaContext.kho_xuat,
+    event_type: 'TRANSFER_SHIPPED',
+  };
+};
+
+const defaultDestinationReceivingDependencies: DestinationReceivingDependencies = {
+  loadSagaContext,
+  receiveTransfer: receiveTransferAtNode,
+};
+
+/**
+ * Task 3.7 & 3.9: Lệnh nhận hàng tại kho đích (Destination Receiving & Discrepancy Support)
+ */
+/**
+ * Task 3.7 & 3.9: Lệnh nhận hàng tại kho đích (Destination Receiving & Discrepancy Support)
+ * Hỗ trợ cả 3 tham số (backward compatible) và 4 tham số (Discrepancy options)
+ */
+export const receiveDestinationTransfer = async (
+  maPhieuDc: string,
+  actor: DestinationReceivingActor,
+  optionsOrDeps?: DiscrepancyOptions | DestinationReceivingDependencies,
+  deps?: DestinationReceivingDependencies,
+) => {
+  let discrepancyOptions: DiscrepancyOptions | undefined;
+  let dependencies: DestinationReceivingDependencies;
+
+  // Tự động nhận diện nếu tham số thứ 3 là dependencies (test cases cũ)
+  if (optionsOrDeps && ('loadSagaContext' in optionsOrDeps || 'receiveTransfer' in optionsOrDeps)) {
+    dependencies = optionsOrDeps as DestinationReceivingDependencies;
+    discrepancyOptions = undefined;
+  } else {
+    discrepancyOptions = optionsOrDeps as DiscrepancyOptions | undefined;
+    dependencies = deps || defaultDestinationReceivingDependencies;
+  }
+
+  const sagaContext = await dependencies.loadSagaContext(maPhieuDc);
+
+  if (!sagaContext) {
+    throw new Error(`Không tìm thấy Saga cho phiếu ${maPhieuDc}`);
+  }
+
+  if (!sagaContext.global_id) {
+    throw new Error(`Saga của phiếu ${maPhieuDc} thiếu ma_giao_dich_global`);
+  }
+
+  if (sagaContext.status !== 'RUNNING') {
+    throw new Error(`Saga đang ở trạng thái ${sagaContext.status}, không thể thực hiện nhận hàng`);
+  }
+
+  if (sagaContext.current_state !== 'IN_TRANSIT') {
+    throw new Error(
+      `Saga đang ở state ${sagaContext.current_state}, không thể thực hiện nhận hàng`,
+    );
+  }
+
+  if (
+    actor.vai_tro !== 'ADMIN' &&
+    (!actor.ma_kho || actor.ma_kho.toUpperCase() !== sagaContext.kho_nhap.toUpperCase())
+  ) {
+    throw new Error(
+      `Tài khoản thuộc kho \({actor.ma_kho}, không có quyền nhận hàng tại kho đích\){sagaContext.kho_nhap}`,
+    );
+  }
+
+  // --- TASK 3.9: Validate & xử lý thông tin chênh lệch ---
+  const actualQty = discrepancyOptions?.so_luong_thuc_nhan ?? sagaContext.so_luong_yeu_cau;
+  const reason = discrepancyOptions?.ly_do_thieu?.trim();
+
+  if (actualQty <= 0) {
+    throw new Error('Số lượng thực nhận phải lớn hơn 0');
+  }
+
+  if (actualQty > sagaContext.so_luong_yeu_cau) {
+    throw new Error(`Số lượng thực nhận (\({actualQty}) không được lớn hơn số lượng yêu cầu (\){sagaContext.so_luong_yeu_cau})`);
+  }
+
+  const isDiscrepancy = actualQty < sagaContext.so_luong_yeu_cau;
+
+  if (isDiscrepancy && (!reason || reason === '')) {
+    throw new Error('Bắt buộc phải nhập lý do thiếu khi số lượng thực nhận không đủ');
+  }
+
+  const command: ReceiveTransferCommand = {
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    ma_kho: sagaContext.kho_nhap,
+    ma_sp: sagaContext.ma_sp,
+    so_luong: sagaContext.so_luong_yeu_cau,
+    so_luong_thuc_nhan: actualQty,
+    ly_do_thieu: isDiscrepancy ? reason : undefined,
+  };
+
+  await dependencies.receiveTransfer(command);
+
+  return {
+    success: true,
+    ma_phieu_dc: sagaContext.ma_phieu_dc,
+    saga_id: sagaContext.saga_id,
+    global_id: sagaContext.global_id,
+    ma_kho: sagaContext.kho_nhap,
+    event_type: isDiscrepancy ? 'TRANSFER_COMPLETED_WITH_DISCREPANCY' : 'TRANSFER_COMPLETED',
+    so_luong_thuc_nhan: actualQty,
+    ly_do_thieu: isDiscrepancy ? reason : null,
+  };
 };

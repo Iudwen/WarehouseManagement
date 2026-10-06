@@ -31,6 +31,12 @@ export const pools: Record<string, Pool> = {
   }),
 };
 
+const warehousePoolByCode: Record<string, Pool> = {
+  HN01: pools.HN,
+  DN01: pools.DN,
+  HCM01: pools.HCM,
+};
+
 /**
  * Lấy Database Connection Pool dựa trên Mã Kho truyền vào.
  * Chuẩn hóa chuỗi (chữ hoa/chữ thường) và nhận diện chuỗi linh hoạt.
@@ -40,10 +46,10 @@ export const getDbPool = (maKho?: string): Pool => {
 
   const kho = maKho.trim().toUpperCase();
 
-  if (kho.startsWith('HN') || kho.includes('HN')) return pools.HN;
-  if (kho.startsWith('DN') || kho.includes('DN')) return pools.DN;
-  if (kho.startsWith('HCM') || kho.includes('HCM')) return pools.HCM;
-  if (kho.startsWith('CENTRAL')) return pools.CENTRAL;
+  if (kho === 'CENTRAL') return pools.CENTRAL;
 
-  return pools.CENTRAL;
+  const pool = warehousePoolByCode[kho];
+  if (pool) return pool;
+
+  throw new Error(`Mã kho không hợp lệ: ${maKho}`);
 };

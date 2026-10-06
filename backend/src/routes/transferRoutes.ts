@@ -1,12 +1,60 @@
 import { Router } from 'express';
-import { handleTransfer } from '../controllers/transferController';
+import {
+  handleApproveTransfer,
+  handleDestinationReceiving,
+  handleSourceConfirmation,
+  handleSourceShipment,
+  handleTransfer,
+} from '../controllers/transferController';
+import { verifyToken, branchGuard, verifyRole } from '../middlewares/auth';
 import { dbSelector } from '../middlewares/dbSelector';
 
 const router = Router();
 
-router.use(dbSelector);
+// Pipeline bảo vệ 4 lớp: Bắt buộc Token -> Chọn DB -> Guard Chi nhánh -> Siết quyền ADMIN/MANAGER
+router.post(
+  '/',
+  verifyToken,
+  dbSelector,
+  branchGuard,
+  verifyRole(['ADMIN', 'MANAGER']), // STAFF gọi API này sẽ nhận ngay 403 Forbidden
+  handleTransfer
+);
 
-// Đổi path từ '/transfer' thành '/' để gọi POST /api/transfer không bị trùng
-router.post('/', handleTransfer);
+router.post(
+  '/:maPhieu/approve',
+  verifyToken,
+  dbSelector,
+  branchGuard,
+  verifyRole(['ADMIN', 'MANAGER']),
+  handleApproveTransfer
+);
+
+router.post(
+  '/:maPhieu/source-confirm',
+  verifyToken,
+  dbSelector,
+  branchGuard,
+  verifyRole(['ADMIN', 'MANAGER']),
+  handleSourceConfirmation
+);
+
+router.post(
+  '/:maPhieu/source-ship',
+  verifyToken,
+  dbSelector,
+  branchGuard,
+  verifyRole(['ADMIN', 'MANAGER']),
+  handleSourceShipment
+);
+
+router.post(
+  '/:maPhieu/destination-receive',
+  verifyToken,
+  dbSelector,
+  branchGuard,
+  verifyRole(['ADMIN', 'MANAGER']),
+  handleDestinationReceiving
+);
 
 export default router;

@@ -1,4 +1,4 @@
-import { getPostgresPool } from '../config/database';
+import { getDbPool } from '../config/postgresql';
 
 export interface ProductPriceResult {
   gia_nhap: number;
@@ -13,7 +13,7 @@ export const getProductPrice = async (
   maSp: string, 
   isImport: boolean = true
 ): Promise<number> => {
-  const pool = getPostgresPool(maKho);
+  const pool = getDbPool(maKho);
   const query = `
     SELECT gia_nhap, gia_ban 
     FROM san_pham 

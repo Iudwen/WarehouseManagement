@@ -1,0 +1,10 @@
+BEGIN;
+
+ALTER TABLE kho
+    ADD COLUMN IF NOT EXISTS loai_kho VARCHAR(20) DEFAULT 'BRANCH';
+
+UPDATE kho
+SET loai_kho = 'BRANCH'
+WHERE loai_kho IS NULL;
+
+COMMIT;
