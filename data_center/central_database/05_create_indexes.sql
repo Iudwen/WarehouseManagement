@@ -37,19 +37,17 @@ ON lich_su_ton_kho_central(ma_sp, ngay);
 
 
 -- =========================================================
--- BÁN HÀNG
+-- XUẤT HÀNG
 -- =========================================================
 
-CREATE INDEX IF NOT EXISTS idx_central_sales_date
-ON ban_hang_central(ngay_ban);
+CREATE INDEX IF NOT EXISTS idx_central_xuat_hang_date
+ON xuat_hang_central(ngay_xuat);
 
+CREATE INDEX IF NOT EXISTS idx_central_xuat_hang_product
+ON xuat_hang_central(ma_sp);
 
-CREATE INDEX IF NOT EXISTS idx_central_sales_product
-ON ban_hang_central(ma_sp);
-
-
-CREATE INDEX IF NOT EXISTS idx_central_sales_warehouse
-ON ban_hang_central(ma_kho);
+CREATE INDEX IF NOT EXISTS idx_central_xuat_hang_warehouse
+ON xuat_hang_central(ma_kho);
 
 
 -- =========================================================

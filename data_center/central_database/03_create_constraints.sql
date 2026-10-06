@@ -47,20 +47,17 @@ REFERENCES san_pham(ma_sp);
 
 
 -- =========================================================
--- BÁN HÀNG
+-- XUẤT HÀNG
 -- =========================================================
 
-ALTER TABLE ban_hang_central
-ADD CONSTRAINT fk_central_sales_kho
-FOREIGN KEY (ma_kho)
-REFERENCES kho(ma_kho);
+CREATE INDEX IF NOT EXISTS idx_central_xuat_hang_date
+ON xuat_hang_central(ngay_xuat);
 
+CREATE INDEX IF NOT EXISTS idx_central_xuat_hang_product
+ON xuat_hang_central(ma_sp);
 
-ALTER TABLE ban_hang_central
-ADD CONSTRAINT fk_central_sales_sp
-FOREIGN KEY (ma_sp)
-REFERENCES san_pham(ma_sp);
-
+CREATE INDEX IF NOT EXISTS idx_central_xuat_hang_warehouse
+ON xuat_hang_central(ma_kho);
 
 -- =========================================================
 -- NHẬP HÀNG
