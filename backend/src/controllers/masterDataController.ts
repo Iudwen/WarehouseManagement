@@ -2,12 +2,29 @@ import { Response } from 'express';
 import { CustomRequest } from '../types';
 import { getMasterDataByNode } from '../services/masterDataService';
 
-export const getMasterData = async (req: CustomRequest, res: Response) => {
+export const getMasterData = async (
+  req: CustomRequest,
+  res: Response
+): Promise<void> => {
   try {
-    const ma_kho = (req.query.ma_kho as string) || req.maKhoContext || 'HN01';
-    const data = await getMasterDataByNode(ma_kho);
-    res.json({ success: true, data });
+    if (!req.dbPool) {
+      res.status(500).json({
+        message: 'Không xác định được kết nối CSDL',
+      });
+      return;
+    }
+
+    const data = await getMasterDataByNode(req.dbPool);
+
+    res.json({
+      success: true,
+      data,
+    });
   } catch (err: any) {
-    res.status(500).json({ message: 'Lỗi lấy dữ liệu danh mục', error: err.message });
+    console.error('Master data error:', err);
+
+    res.status(500).json({
+      message: 'Lỗi lấy dữ liệu danh mục',
+    });
   }
 };

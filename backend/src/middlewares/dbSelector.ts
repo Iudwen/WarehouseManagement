@@ -2,24 +2,51 @@ import { Response, NextFunction } from 'express';
 import { CustomRequest } from '../types';
 import { getDbPool } from '../config/postgresql';
 
-export const dbSelector = (req: CustomRequest, res: Response, next: NextFunction): void => {
+export const dbSelector = (
+  req: CustomRequest,
+  res: Response,
+  next: NextFunction
+): void => {
   try {
-    // Ưu tiên lấy mã kho từ Query (GET), Body (POST), Header, hoặc User (khi có Auth)
-    const maKho = (
-      req.query?.ma_kho || 
-      req.body?.ma_kho || 
-      req.headers['x-warehouse-id'] || 
-      req.user?.ma_kho
-    ) as string | undefined;
+    if (!req.user) {
+      res.status(401).json({
+        message: 'Chưa đăng nhập',
+      });
+      return;
+    }
 
-    // Gán DB Pool tương ứng
-    req.dbPool = getDbPool(maKho);
-    
-    // Nếu maKho có giá trị thì chuẩn hóa chữ hoa, nếu không gán mặc định 'HN01'
-    req.maKhoContext = maKho ? maKho.trim().toUpperCase() : 'HN01';
+    const { vai_tro, ma_kho } = req.user;
+
+    const centralRoles = [
+      'ADMIN',
+      'DIEU_PHOI',
+      'DATA_ANALYST',
+    ];
+
+    if (centralRoles.includes(vai_tro)) {
+      req.dbPool = getDbPool('CENTRAL');
+      req.maKhoContext = 'CENTRAL';
+
+      next();
+      return;
+    }
+
+    if (!ma_kho) {
+      res.status(403).json({
+        message: 'Tài khoản chưa được gán kho',
+      });
+      return;
+    }
+
+    req.dbPool = getDbPool(ma_kho);
+    req.maKhoContext = ma_kho.toUpperCase();
 
     next();
   } catch (error: any) {
-    res.status(500).json({ message: `Lỗi phân phối kết nối CSDL Node: ${error.message}` });
+    console.error('DB Selector Error:', error);
+
+    res.status(500).json({
+      message: 'Lỗi phân phối kết nối CSDL',
+    });
   }
 };

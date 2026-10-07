@@ -1,10 +1,13 @@
 import { Router } from 'express';
 import { handleImport, handleExport } from '../controllers/inventoryController';
+import { auth } from '../middlewares/auth';
+import { roleGuard } from '../middlewares/roleGuard';
 import { dbSelector } from '../middlewares/dbSelector';
 
 const router = Router();
 
-// Bọc chung ở đầu router thay vì viết lặp lại ở từng route
+router.use(auth);
+router.use(roleGuard('NHAN_VIEN_KHO'));
 router.use(dbSelector);
 
 router.post('/import', handleImport);
