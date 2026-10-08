@@ -133,15 +133,32 @@ export const updateTransferStatus = async (
 export const createSaga = async (
   client: PoolClient,
   maPhieuDc: string
-): Promise<string> => {
+): Promise<{
+  saga_id: string;
+  global_id: string;
+}> => {
   const result = await client.query(
     `
-    SELECT sp_create_saga($1) AS saga_id
+    SELECT
+      saga_id,
+      ma_giao_dich_global
+    FROM saga_transaction
+    WHERE ma_phieu_dc = $1
+    LIMIT 1
     `,
     [maPhieuDc]
   );
 
-  return result.rows[0].saga_id;
+  if (!result.rows[0]) {
+    throw new Error(
+      `Không tìm thấy Saga cho phiếu ${maPhieuDc}`
+    );
+  }
+
+  return {
+    saga_id: result.rows[0].saga_id,
+    global_id: result.rows[0].ma_giao_dich_global,
+  };
 };
 
 export const getSagaByTransferId = async (

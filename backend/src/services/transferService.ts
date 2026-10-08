@@ -8,6 +8,10 @@ import {
   getSagaByTransferId,
 } from '../repositories/transferRepository';
 
+import {
+  acceptTransfer,
+} from '../repositories/nodeTransferRepository';
+
 export interface TransferPayload {
   ma_phieu_dc: string;
   kho_xuat: string;
@@ -110,12 +114,6 @@ export const approveTransfer = async (
   try {
     await client.query('BEGIN');
 
-    await updateTransferStatus(
-      client,
-      maPhieuDc,
-      'CHO_XU_LY'
-    );
-
     const sagaId = await createSaga(
       client,
       maPhieuDc
@@ -126,7 +124,7 @@ export const approveTransfer = async (
     return {
       ma_phieu_dc: maPhieuDc,
       saga_id: sagaId,
-      trang_thai: 'CHO_XU_LY',
+      trang_thai: 'DANG_XU_LY',
     };
   } catch (error) {
     await client.query('ROLLBACK');
@@ -135,7 +133,6 @@ export const approveTransfer = async (
     client.release();
   }
 };
-
 export const shipTransfer = async (
   maPhieuDc: string,
   maNguoiThucHien?: string,
@@ -270,4 +267,53 @@ export const receiveTransfer = async (
   throw new Error(
     'Chưa triển khai nghiệp vụ nhận điều chuyển tại node đích'
   );
+};
+export const confirmSourceTransfer = async (
+  maPhieuDc: string,
+  maNguoiDung?: string,
+  maKhoContext?: string
+) => {
+  if (!maNguoiDung) {
+    throw new Error('Không xác định được người xác nhận');
+  }
+
+  if (!maKhoContext || maKhoContext === 'CENTRAL') {
+    throw new Error(
+      'Người xác nhận phải thuộc một kho chi nhánh'
+    );
+  }
+
+  const pool = pools.CENTRAL;
+
+  const saga = await getSagaByTransferId(
+    pool,
+    maPhieuDc
+  );
+
+  if (!saga) {
+    throw new Error(
+      `Phiếu ${maPhieuDc} chưa có Saga`
+    );
+  }
+  if (saga.current_state !== 'WAITING_SOURCE_CONFIRMATION') {
+    throw new Error(
+      `Saga không ở trạng thái chờ kho nguồn xác nhận: ${saga.current_state}`
+    );
+  }
+  await acceptTransfer(pool, {
+    saga_id: saga.saga_id,
+    global_id: saga.ma_giao_dich_global,
+    ma_phieu_dc: saga.ma_phieu_dc,
+    ma_kho: saga.kho_xuat,
+    ma_sp: saga.ma_sp,
+    so_luong: saga.so_luong_yeu_cau,
+  });
+  return {
+    success: true,
+    ma_phieu_dc: saga.ma_phieu_dc,
+    saga_id: saga.saga_id,
+    global_id: saga.ma_giao_dich_global,
+    ma_kho: saga.kho_xuat,
+    event_type: 'TRANSFER_ACCEPTED',
+  };
 };

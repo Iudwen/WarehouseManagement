@@ -1,8 +1,9 @@
-import { Router } from 'express';
+﻿import { Router } from 'express';
 
 import {
   handleTransfer,
   handleApproveTransfer,
+  handleConfirmSourceTransfer,
   handleSourceShipment,
   handleDestinationReceiving,
 } from '../controllers/transferController';
@@ -27,6 +28,14 @@ router.post(
   roleGuard('QUAN_LY_KHO'),
   dbSelector,
   handleApproveTransfer
+);
+
+router.post(
+  '/:maPhieu/source-confirm',
+  auth,
+  roleGuard('NHAN_VIEN_KHO'),
+  dbSelector,
+  handleConfirmSourceTransfer
 );
 
 router.post(

@@ -1,8 +1,9 @@
-import { Response } from 'express';
+﻿import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
   processTransfer,
   approveTransfer,
+  confirmSourceTransfer,
   shipTransfer,
   receiveTransfer,
 } from '../services/transferService';
@@ -104,6 +105,31 @@ export const handleDestinationReceiving = async (
 
     res.status(400).json({
       message: err.message || 'Lỗi nhận hàng điều chuyển',
+    });
+  }
+};
+export const handleConfirmSourceTransfer = async (
+  req: CustomRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { maPhieu } = req.params;
+
+    const result = await confirmSourceTransfer(
+      maPhieu,
+      req.user?.ma_nguoi_dung,
+      req.maKhoContext
+    );
+
+    res.status(200).json({
+      message: 'Xác nhận kho nguồn thành công',
+      data: result,
+    });
+  } catch (err: any) {
+    console.error('Confirm source transfer error:', err);
+
+    res.status(400).json({
+      message: err.message || 'Lỗi xác nhận kho nguồn',
     });
   }
 };
