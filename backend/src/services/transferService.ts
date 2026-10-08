@@ -1,100 +1,319 @@
-import { getDbPool } from '../config/postgresql';
-import { logTransferEvent } from './eventLogger';
+import { pools } from '../config/postgresql';
+
+import {
+  findTransferById,
+  createTransfer,
+  updateTransferStatus,
+  createSaga,
+  getSagaByTransferId,
+} from '../repositories/transferRepository';
+
+import {
+  acceptTransfer,
+} from '../repositories/nodeTransferRepository';
 
 export interface TransferPayload {
   ma_phieu_dc: string;
   kho_xuat: string;
   kho_nhap: string;
-  items: Array<{ ma_sp: string; so_luong: number }>;
+  ma_sp: string;
+  so_luong: number;
 }
 
-export const processTransfer = async (payload: TransferPayload) => {
-  const { ma_phieu_dc, kho_xuat, kho_nhap, items } = payload;
-  
-  const poolExport = getDbPool(kho_xuat);
-  const poolImport = getDbPool(kho_nhap);
+export const processTransfer = async (
+  payload: TransferPayload & {
+    nguoi_tao?: string;
+  }
+) => {
+  const pool = pools.CENTRAL;
 
-  const clientExport = await poolExport.connect();
-  const clientImport = await poolImport.connect();
+  const existing = await findTransferById(
+    pool,
+    payload.ma_phieu_dc
+  );
+
+  if (existing) {
+    throw new Error(
+      `Phiếu điều chuyển ${payload.ma_phieu_dc} đã tồn tại`
+    );
+  }
+
+  if (payload.kho_xuat === payload.kho_nhap) {
+    throw new Error(
+      'Kho xuất và kho nhập không được giống nhau'
+    );
+  }
+
+  if (!payload.ma_sp) {
+    throw new Error('Mã sản phẩm không được để trống');
+  }
+
+  if (!payload.so_luong || payload.so_luong <= 0) {
+    throw new Error('Số lượng điều chuyển phải lớn hơn 0');
+  }
+
+  return createTransfer(pool, {
+    ma_phieu_dc: payload.ma_phieu_dc,
+    kho_xuat: payload.kho_xuat,
+    kho_nhap: payload.kho_nhap,
+    ma_sp: payload.ma_sp,
+    so_luong: payload.so_luong,
+    trang_thai: 'PENDING',
+  });
+};
+
+export const approveTransfer = async (
+  maPhieuDc: string,
+  maNguoiDuyet?: string,
+  maKhoContext?: string
+) => {
+  if (!maNguoiDuyet) {
+    throw new Error('Không xác định được người duyệt');
+  }
+
+  if (!maKhoContext || maKhoContext === 'CENTRAL') {
+    throw new Error(
+      'Người duyệt phải thuộc một kho chi nhánh'
+    );
+  }
+
+  const pool = pools.CENTRAL;
+
+  const transfer = await findTransferById(
+    pool,
+    maPhieuDc
+  );
+
+  if (!transfer) {
+    throw new Error(
+      `Không tìm thấy phiếu điều chuyển ${maPhieuDc}`
+    );
+  }
+
+  if (
+    transfer.kho_xuat.trim().toUpperCase() !==
+    maKhoContext.trim().toUpperCase()
+  ) {
+    throw new Error(
+      'Bạn không có quyền duyệt phiếu của kho khác'
+    );
+  }
+
+  if (
+    !['PENDING', 'CREATED', 'CHO_XU_LY'].includes(
+      transfer.trang_thai
+    )
+  ) {
+    throw new Error(
+      `Phiếu ${maPhieuDc} không ở trạng thái có thể duyệt`
+    );
+  }
+
+  const client = await pool.connect();
 
   try {
-    // Phase 1: Mở Transaction TRÊN CẢ 2 NODE cùng lúc
-    await clientExport.query('BEGIN');
-    await clientImport.query('BEGIN');
+    await client.query('BEGIN');
 
-    // 1. Kiểm tra & Trừ kho tại Node Xuất (Lock dòng với FOR UPDATE)
-    for (const item of items) {
-      const res = await clientExport.query(
-        `SELECT so_luong FROM ton_kho WHERE ma_kho = $1 AND ma_sp = $2 FOR UPDATE`,
-        [kho_xuat, item.ma_sp]
-      );
-      const currentStock = res.rows[0]?.so_luong || 0;
-      if (currentStock < item.so_luong) {
-        throw new Error(`Kho xuất ${kho_xuat} không đủ hàng ${item.ma_sp} (Hiện có: ${currentStock})`);
-      }
-
-      await clientExport.query(
-        `UPDATE ton_kho SET so_luong = so_luong - $1, cap_nhat_luc = NOW() 
-         WHERE ma_kho = $2 AND ma_sp = $3`,
-        [item.so_luong, kho_xuat, item.ma_sp]
-      );
-
-      await clientExport.query(
-        `INSERT INTO lich_su_ton_kho (ma_kho, ma_sp, ngay, dieu_chuyen_ra) 
-         VALUES ($1, $2, CURRENT_DATE, $3)
-         ON CONFLICT (ma_kho, ma_sp, ngay) 
-         DO UPDATE SET dieu_chuyen_ra = lich_su_ton_kho.dieu_chuyen_ra + EXCLUDED.dieu_chuyen_ra`,
-        [kho_xuat, item.ma_sp, item.so_luong]
-      );
-    }
-
-    await clientExport.query(
-      `INSERT INTO phieu_dieu_chuyen (ma_phieu_dc, kho_xuat, kho_nhap, ngay_dieu_chuyen, trang_thai)
-       VALUES ($1, $2, $3, NOW(), 'COMPLETED')`,
-      [ma_phieu_dc, kho_xuat, kho_nhap]
+    const sagaId = await createSaga(
+      client,
+      maPhieuDc
     );
 
-    for (const item of items) {
-      await clientExport.query(
-        `INSERT INTO ct_dieu_chuyen (ma_phieu_dc, ma_sp, so_luong) VALUES ($1, $2, $3)`,
-        [ma_phieu_dc, item.ma_sp, item.so_luong]
-      );
-    }
+    await client.query('COMMIT');
 
-    // 2. Cộng kho tại Node Nhập
-    for (const item of items) {
-      await clientImport.query(
-        `INSERT INTO ton_kho (ma_kho, ma_sp, so_luong, cap_nhat_luc)
-         VALUES ($1, $2, $3, NOW())
-         ON CONFLICT (ma_kho, ma_sp) 
-         DO UPDATE SET so_luong = ton_kho.so_luong + EXCLUDED.so_luong, cap_nhat_luc = NOW()`,
-        [kho_nhap, item.ma_sp, item.so_luong]
-      );
-
-      await clientImport.query(
-        `INSERT INTO lich_su_ton_kho (ma_kho, ma_sp, ngay, dieu_chuyen_vao) 
-         VALUES ($1, $2, CURRENT_DATE, $3)
-         ON CONFLICT (ma_kho, ma_sp, ngay) 
-         DO UPDATE SET dieu_chuyen_vao = lich_su_ton_kho.dieu_chuyen_vao + EXCLUDED.dieu_chuyen_vao`,
-        [kho_nhap, item.ma_sp, item.so_luong]
-      );
-    }
-
-    // Phase 2: Cả 2 Node OK mới tiến hành COMMIT
-    await clientExport.query('COMMIT');
-    await clientImport.query('COMMIT');
-
-    // 3. Đẩy Event log sang Mongo
-    logTransferEvent({ ma_phieu_dc, kho_xuat, kho_nhap, items });
-
-    return { success: true, ma_phieu_dc };
+    return {
+      ma_phieu_dc: maPhieuDc,
+      saga_id: sagaId,
+      trang_thai: 'DANG_XU_LY',
+    };
   } catch (error) {
-    // Nếu có bất kỳ lỗi nào, ROLLBACK CẢ 2 NODE an toàn 100%
-    await clientExport.query('ROLLBACK');
-    await clientImport.query('ROLLBACK');
+    await client.query('ROLLBACK');
     throw error;
   } finally {
-    clientExport.release();
-    clientImport.release();
+    client.release();
   }
+};
+export const shipTransfer = async (
+  maPhieuDc: string,
+  maNguoiThucHien?: string,
+  maKhoContext?: string
+) => {
+  if (!maNguoiThucHien) {
+    throw new Error(
+      'Không xác định được nhân viên thực hiện'
+    );
+  }
+
+  if (!maKhoContext || maKhoContext === 'CENTRAL') {
+    throw new Error(
+      'Nhân viên xuất hàng phải thuộc kho chi nhánh'
+    );
+  }
+
+  const pool = pools.CENTRAL;
+
+  const transfer = await findTransferById(
+    pool,
+    maPhieuDc
+  );
+
+  if (!transfer) {
+    throw new Error(
+      `Không tìm thấy phiếu điều chuyển ${maPhieuDc}`
+    );
+  }
+
+  if (
+    transfer.kho_xuat.trim().toUpperCase() !==
+    maKhoContext.trim().toUpperCase()
+  ) {
+    throw new Error(
+      'Bạn không thuộc kho xuất của phiếu này'
+    );
+  }
+
+  const saga = await getSagaByTransferId(
+    pool,
+    maPhieuDc
+  );
+
+  if (!saga) {
+    throw new Error(
+      `Phiếu ${maPhieuDc} chưa có Saga`
+    );
+  }
+
+  if (saga.current_state !== 'WAITING_SOURCE_CONFIRMATION') {
+    throw new Error(
+      `Saga không ở trạng thái chờ kho nguồn xác nhận: ${saga.current_state}`
+    );
+  }
+
+  /*
+   * TODO:
+   * Bước này cần xác định chính xác cơ chế node nguồn
+   * xuất hàng và function/procedure tương ứng.
+   *
+   * Chưa được tự ý trừ tồn kho ở CENTRAL.
+   */
+
+  throw new Error(
+    'Chưa triển khai nghiệp vụ xuất điều chuyển tại node nguồn'
+  );
+};
+
+export const receiveTransfer = async (
+  maPhieuDc: string,
+  maNguoiThucHien?: string,
+  maKhoContext?: string
+) => {
+  if (!maNguoiThucHien) {
+    throw new Error(
+      'Không xác định được nhân viên thực hiện'
+    );
+  }
+
+  if (!maKhoContext || maKhoContext === 'CENTRAL') {
+    throw new Error(
+      'Nhân viên nhận hàng phải thuộc kho chi nhánh'
+    );
+  }
+
+  const pool = pools.CENTRAL;
+
+  const transfer = await findTransferById(
+    pool,
+    maPhieuDc
+  );
+
+  if (!transfer) {
+    throw new Error(
+      `Không tìm thấy phiếu điều chuyển ${maPhieuDc}`
+    );
+  }
+
+  if (
+    transfer.kho_nhap.trim().toUpperCase() !==
+    maKhoContext.trim().toUpperCase()
+  ) {
+    throw new Error(
+      'Bạn không thuộc kho nhập của phiếu này'
+    );
+  }
+
+  const saga = await getSagaByTransferId(
+    pool,
+    maPhieuDc
+  );
+
+  if (!saga) {
+    throw new Error(
+      `Phiếu ${maPhieuDc} chưa có Saga`
+    );
+  }
+
+  if (saga.current_state !== 'IN_TRANSIT') {
+    throw new Error(
+      `Saga chưa ở trạng thái đang vận chuyển: ${saga.current_state}`
+    );
+  }
+
+  /*
+   * TODO:
+   * Cần xác định function/procedure nhận hàng trong Saga SQL
+   * trước khi cập nhật COMPLETED.
+   */
+
+  throw new Error(
+    'Chưa triển khai nghiệp vụ nhận điều chuyển tại node đích'
+  );
+};
+export const confirmSourceTransfer = async (
+  maPhieuDc: string,
+  maNguoiDung?: string,
+  maKhoContext?: string
+) => {
+  if (!maNguoiDung) {
+    throw new Error('Không xác định được người xác nhận');
+  }
+
+  if (!maKhoContext || maKhoContext === 'CENTRAL') {
+    throw new Error(
+      'Người xác nhận phải thuộc một kho chi nhánh'
+    );
+  }
+
+  const pool = pools.CENTRAL;
+
+  const saga = await getSagaByTransferId(
+    pool,
+    maPhieuDc
+  );
+
+  if (!saga) {
+    throw new Error(
+      `Phiếu ${maPhieuDc} chưa có Saga`
+    );
+  }
+  if (saga.current_state !== 'WAITING_SOURCE_CONFIRMATION') {
+    throw new Error(
+      `Saga không ở trạng thái chờ kho nguồn xác nhận: ${saga.current_state}`
+    );
+  }
+  await acceptTransfer(pool, {
+    saga_id: saga.saga_id,
+    global_id: saga.ma_giao_dich_global,
+    ma_phieu_dc: saga.ma_phieu_dc,
+    ma_kho: saga.kho_xuat,
+    ma_sp: saga.ma_sp,
+    so_luong: saga.so_luong_yeu_cau,
+  });
+  return {
+    success: true,
+    ma_phieu_dc: saga.ma_phieu_dc,
+    saga_id: saga.saga_id,
+    global_id: saga.ma_giao_dich_global,
+    ma_kho: saga.kho_xuat,
+    event_type: 'TRANSFER_ACCEPTED',
+  };
 };

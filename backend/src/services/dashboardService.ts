@@ -1,31 +1,52 @@
-import { getDbPool } from '../config/postgresql';
+import { pools } from '../config/postgresql';
+import { getStockByNode } from '../repositories/dashboardRepository';
 
-export const getAggregatedStock = async (ma_kho?: string) => {
-  const allNodes = [
-    { code: 'HN01', name: 'Kho Hà Nội' },
-    { code: 'DN01', name: 'Kho Đà Nẵng' },
-    { code: 'HCM01', name: 'Kho TP.HCM' }
-  ];
+const NODE_CONFIG = [
+  {
+    code: 'HN01',
+    poolKey: 'HN',
+  },
+  {
+    code: 'DN01',
+    poolKey: 'DN',
+  },
+  {
+    code: 'HCM01',
+    poolKey: 'HCM',
+  },
+] as const;
 
-  // Nếu Frontend truyền ma_kho cụ thể thì chỉ quét Node đó, ngược lại quét tất cả
-  const targetNodes = ma_kho 
-    ? allNodes.filter(n => n.code.toUpperCase().includes(ma_kho.toUpperCase()))
-    : allNodes;
+export const getAggregatedStock = async (
+  maKho?: string
+) => {
+  const normalizedKho = maKho?.trim().toUpperCase();
+
+  let targetNodes: typeof NODE_CONFIG[number][] = [...NODE_CONFIG];
+
+  // Tài khoản thuộc một kho → chỉ xem kho đó
+  if (
+    normalizedKho &&
+    normalizedKho !== 'CENTRAL'
+  ) {
+    targetNodes = NODE_CONFIG.filter(
+      (node) => node.code === normalizedKho
+    );
+  }
 
   const stockData: any[] = [];
 
   for (const node of targetNodes) {
     try {
-      const pool = getDbPool(node.code);
-      const res = await pool.query(`
-        SELECT t.ma_kho, k.ten_kho, t.ma_sp, sp.ten_sp, t.so_luong, t.cap_nhat_luc
-        FROM ton_kho t
-        JOIN san_pham sp ON t.ma_sp = sp.ma_sp
-        JOIN kho k ON t.ma_kho = k.ma_kho
-      `);
-      stockData.push(...res.rows);
-    } catch (err) {
-      console.error(`Không thể kết nối tới Node ${node.code}:`, err);
+      const pool = pools[node.poolKey];
+
+      const rows = await getStockByNode(pool);
+
+      stockData.push(...rows);
+    } catch (error) {
+      console.error(
+        `Không thể lấy dữ liệu tồn kho Node ${node.code}:`,
+        error
+      );
     }
   }
 

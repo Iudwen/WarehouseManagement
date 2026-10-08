@@ -1,11 +1,18 @@
 import { Request } from 'express';
 import { Pool } from 'pg';
 
+export type UserRole =
+  | 'ADMIN'
+  | 'DIEU_PHOI'
+  | 'DATA_ANALYST'
+  | 'QUAN_LY_KHO'
+  | 'NHAN_VIEN_KHO';
+
 export interface UserPayload {
   ma_nguoi_dung: string;
   ho_ten: string;
-  vai_tro: string;
-  ma_kho: string;
+  vai_tro: UserRole;
+  ma_kho: string | null;
 }
 
 export interface CustomRequest extends Request {

@@ -3,16 +3,22 @@ import { CustomRequest } from '../types';
 import { getAggregatedStock } from '../services/dashboardService';
 import mongoose from 'mongoose';
 
-export const getDashboardSummary = async (req: CustomRequest, res: Response) => {
+export const getDashboardSummary = async (
+  req: CustomRequest,
+  res: Response
+): Promise<void> => {
   try {
-    const ma_kho = (req.query.ma_kho as string) || req.maKhoContext;
-    const stocks = await getAggregatedStock(ma_kho);
-    
-    // Query Log sự kiện thực tế từ MongoDB có filter theo kho
-    const eventsCollection = mongoose.connection.collection('inventory_events');
-    const query: any = {};
-    if (ma_kho) {
-      query.ma_kho = ma_kho.trim().toUpperCase();
+    const maKho = req.maKhoContext;
+
+    const stocks = await getAggregatedStock(maKho);
+
+    const eventsCollection =
+      mongoose.connection.collection('inventory_events');
+
+    const query: Record<string, unknown> = {};
+
+    if (maKho && maKho !== 'CENTRAL') {
+      query.ma_kho = maKho.trim().toUpperCase();
     }
 
     const recentLogs = await eventsCollection
@@ -23,11 +29,15 @@ export const getDashboardSummary = async (req: CustomRequest, res: Response) => 
 
     res.json({
       success: true,
-      warehouse: ma_kho || 'ALL',
+      warehouse: maKho || 'CENTRAL',
       stocks,
-      recentLogs
+      recentLogs,
     });
   } catch (err: any) {
-    res.status(500).json({ message: 'Lỗi lấy dữ liệu Dashboard', error: err.message });
+    console.error('Dashboard error:', err);
+
+    res.status(500).json({
+      message: 'Lỗi lấy dữ liệu Dashboard',
+    });
   }
 };
