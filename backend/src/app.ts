@@ -1,4 +1,6 @@
-import 'dotenv/config';
+import dotenv from 'dotenv';
+
+dotenv.config({ path: '../.env' });
 import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
@@ -17,7 +19,9 @@ app.use(cors());
 app.use(express.json());
 
 // Kết nối Mongo Event Log
-const mongoUri = process.env.MONGO_URI || 'mongodb://admin:admin123@localhost:27017/warehouse_events?authSource=admin';
+const mongoUri =
+  process.env.MONGO_URI ||
+  'mongodb://localhost:65518/warehouse_events';
 mongoose.connect(mongoUri)
   .then(() => console.log('🍃 MongoDB Event Logs Connected!'))
   .catch((err) => console.error('❌ Lỗi kết nối MongoDB:', err));
