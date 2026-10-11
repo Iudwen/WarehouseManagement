@@ -582,6 +582,8 @@ $$;
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION sp_create_vwh_transfer(
+    p_event_id UUID,
+    p_payload JSONB,
     p_saga_id UUID,
     p_global_id UUID,
     p_ma_phieu_dc VARCHAR(20),
@@ -591,331 +593,124 @@ RETURNS BIGINT
 LANGUAGE plpgsql
 AS $$
 DECLARE
-
+    v_ext_payload JSONB;
     v_vwh_id BIGINT;
-
     v_ma_giao_dich_global UUID;
-
     v_ma_phieu_dc VARCHAR(20);
-
     v_ma_sp VARCHAR(20);
-
     v_kho_xuat VARCHAR(10);
     v_kho_nhap VARCHAR(10);
-
     v_so_luong_yeu_cau INT;
     v_so_luong_da_xuat INT;
-
     v_status VARCHAR(20);
-
     v_vwh_exists BIGINT;
-
 BEGIN
 
     -- ========================================================
-    -- 1. VALIDATE
+    -- 0. KIỂM TRA TÍNH NHẤT QUÁN CỦA PAYLOAD VÀ THAM SỐ
     -- ========================================================
-
-    IF p_saga_id IS NULL THEN
-
-        RAISE EXCEPTION
-            'saga_id không được NULL';
-
+    IF p_payload IS NULL THEN
+        RAISE EXCEPTION 'Payload is null' USING ERRCODE = 'U0003';
     END IF;
 
-
-    IF p_global_id IS NULL THEN
-
-        RAISE EXCEPTION
-            'global_id không được NULL';
-
+    IF (p_payload->>'saga_id')::UUID IS DISTINCT FROM p_saga_id
+       OR (p_payload->>'ma_giao_dich_global')::UUID IS DISTINCT FROM p_global_id
+       OR (p_payload->>'ma_phieu_dc') IS DISTINCT FROM p_ma_phieu_dc
+       OR (p_payload->>'so_luong')::INT IS DISTINCT FROM p_so_luong_xuat THEN
+        RAISE EXCEPTION 'Payload data missing or mismatch' USING ERRCODE = 'U0003';
     END IF;
-
-
-    IF p_ma_phieu_dc IS NULL
-       OR TRIM(p_ma_phieu_dc) = '' THEN
-
-        RAISE EXCEPTION
-            'Mã phiếu điều chuyển không được để trống';
-
-    END IF;
-
-
-    IF p_so_luong_xuat IS NULL
-       OR p_so_luong_xuat <= 0 THEN
-
-        RAISE EXCEPTION
-            'Số lượng xuất phải lớn hơn 0: %',
-            p_so_luong_xuat;
-
-    END IF;
-
 
     -- ========================================================
-    -- 2. KHÓA SAGA
+    -- 1. SUBTRANSACTION IDEMPOTENCY
     -- ========================================================
+    BEGIN
+        INSERT INTO processed_event (event_id, source_node, event_type, payload, status)
+        VALUES (p_event_id, COALESCE(p_payload->>'kho_xuat', 'UNKNOWN'), 'TRANSFER_SHIPPED', p_payload, 'SUCCESS');
+    EXCEPTION WHEN unique_violation THEN
+        SELECT payload INTO v_ext_payload FROM processed_event WHERE event_id = p_event_id;
+        IF v_ext_payload = p_payload THEN
+            SELECT vwh_id INTO v_vwh_exists FROM vwh_transfer WHERE saga_id = p_saga_id AND ma_phieu_dc = p_ma_phieu_dc LIMIT 1;
+            IF NOT FOUND THEN
+                RAISE EXCEPTION 'Processed event exists but VWH missing' USING ERRCODE = 'U0004';
+            END IF;
+            RETURN v_vwh_exists;
+        ELSE
+            RAISE EXCEPTION 'Payload conflict for event %', p_event_id USING ERRCODE = 'U0003';
+        END IF;
+    END;
 
-    SELECT
+    -- ========================================================
+    -- 2. VALIDATE INPUT NGHIỆP VỤ
+    -- ========================================================
+    IF p_saga_id IS NULL THEN RAISE EXCEPTION 'saga_id không được NULL'; END IF;
+    IF p_global_id IS NULL THEN RAISE EXCEPTION 'global_id không được NULL'; END IF;
+    IF p_ma_phieu_dc IS NULL OR TRIM(p_ma_phieu_dc) = '' THEN RAISE EXCEPTION 'Mã phiếu điều chuyển không được để trống'; END IF;
+    IF p_so_luong_xuat IS NULL OR p_so_luong_xuat <= 0 THEN RAISE EXCEPTION 'Số lượng xuất phải lớn hơn 0: %', p_so_luong_xuat; END IF;
 
-        ma_giao_dich_global,
-
-        ma_phieu_dc,
-
-        ma_sp,
-
-        kho_xuat,
-
-        kho_nhap,
-
-        so_luong_yeu_cau,
-
-        so_luong_da_xuat,
-
-        status
-
-    INTO
-
-        v_ma_giao_dich_global,
-
-        v_ma_phieu_dc,
-
-        v_ma_sp,
-
-        v_kho_xuat,
-
-        v_kho_nhap,
-
-        v_so_luong_yeu_cau,
-
-        v_so_luong_da_xuat,
-
-        v_status
-
+    -- ========================================================
+    -- 3. KHÓA SAGA & KIỂM TRA
+    -- ========================================================
+    SELECT ma_giao_dich_global, ma_phieu_dc, ma_sp, kho_xuat, kho_nhap, so_luong_yeu_cau, so_luong_da_xuat, status
+    INTO v_ma_giao_dich_global, v_ma_phieu_dc, v_ma_sp, v_kho_xuat, v_kho_nhap, v_so_luong_yeu_cau, v_so_luong_da_xuat, v_status
     FROM saga_transaction
+    WHERE saga_id = p_saga_id FOR UPDATE;
 
-    WHERE saga_id = p_saga_id
-
-    FOR UPDATE;
-
-
-    -- ========================================================
-    -- 3. KIỂM TRA SAGA
-    -- ========================================================
-
-    IF NOT FOUND THEN
-
-        RAISE EXCEPTION
-            'Không tìm thấy Saga: %',
-            p_saga_id;
-
-    END IF;
-
+    IF NOT FOUND THEN RAISE EXCEPTION 'Không tìm thấy Saga: %', p_saga_id; END IF;
+    IF v_ma_giao_dich_global <> p_global_id THEN RAISE EXCEPTION 'global_id không khớp với Saga %', p_saga_id; END IF;
+    IF v_ma_phieu_dc <> p_ma_phieu_dc THEN RAISE EXCEPTION 'Phiếu % không khớp với Saga %', p_ma_phieu_dc, p_saga_id; END IF;
+    IF v_status <> 'RUNNING' THEN RAISE EXCEPTION 'Saga % không ở trạng thái RUNNING. Status=%', p_saga_id, v_status; END IF;
+    IF p_so_luong_xuat > v_so_luong_yeu_cau THEN RAISE EXCEPTION 'Số lượng xuất (%) vượt số lượng yêu cầu (%)', p_so_luong_xuat, v_so_luong_yeu_cau; END IF;
+    IF v_so_luong_da_xuat + p_so_luong_xuat > v_so_luong_yeu_cau THEN RAISE EXCEPTION 'Tổng số lượng đã xuất vượt số lượng yêu cầu'; END IF;
 
     -- ========================================================
-    -- 4. GLOBAL ID
+    -- 4. TẠO VWH
     -- ========================================================
-
-    IF v_ma_giao_dich_global <> p_global_id THEN
-
-        RAISE EXCEPTION
-            'global_id không khớp với Saga %',
-            p_saga_id;
-
-    END IF;
-
-
-    -- ========================================================
-    -- 5. PHIẾU
-    -- ========================================================
-
-    IF v_ma_phieu_dc <> p_ma_phieu_dc THEN
-
-        RAISE EXCEPTION
-            'Phiếu % không khớp với Saga %',
-            p_ma_phieu_dc,
-            p_saga_id;
-
-    END IF;
-
-
-    -- ========================================================
-    -- 6. STATUS
-    -- ========================================================
-
-    IF v_status <> 'RUNNING' THEN
-
-        RAISE EXCEPTION
-            'Saga % không ở trạng thái RUNNING. Status=%',
-            p_saga_id,
-            v_status;
-
-    END IF;
-
-
-    -- ========================================================
-    -- 7. SỐ LƯỢNG
-    -- ========================================================
-
-    IF p_so_luong_xuat > v_so_luong_yeu_cau THEN
-
-        RAISE EXCEPTION
-            'Số lượng xuất (%) vượt số lượng yêu cầu (%)',
-            p_so_luong_xuat,
-            v_so_luong_yeu_cau;
-
-    END IF;
-
-
-    IF v_so_luong_da_xuat + p_so_luong_xuat
-       > v_so_luong_yeu_cau THEN
-
-        RAISE EXCEPTION
-            'Tổng số lượng đã xuất vượt số lượng yêu cầu';
-
-    END IF;
-
-
-    -- ========================================================
-    -- 8. KIỂM TRA VWH
-    -- ========================================================
-
-    SELECT vwh_id
-    INTO v_vwh_exists
-
-    FROM vwh_transfer
-
-    WHERE saga_id = p_saga_id
-
-    ORDER BY vwh_id
-
-    LIMIT 1
-
-    FOR UPDATE;
-
-
-    IF FOUND THEN
-
-        RAISE NOTICE
-            'VWH đã tồn tại: vwh_id=%',
-            v_vwh_exists;
-
-        RETURN v_vwh_exists;
-
-    END IF;
-
-
-    -- ========================================================
-    -- 9. TẠO VWH
-    -- ========================================================
-
     INSERT INTO vwh_transfer (
-
-        saga_id,
-
-        ma_phieu_dc,
-
-        ma_sp,
-
-        kho_xuat,
-
-        kho_nhap,
-
-        so_luong_xuat,
-
-        so_luong_da_nhan,
-
-        so_luong_dang_van_chuyen,
-
-        trang_thai,
-
-        created_at,
-
-        updated_at
-
+        saga_id, ma_phieu_dc, ma_sp, kho_xuat, kho_nhap, so_luong_xuat, so_luong_da_nhan, so_luong_dang_van_chuyen, trang_thai, created_at, updated_at
     )
-
     VALUES (
-
-        p_saga_id,
-
-        p_ma_phieu_dc,
-
-        v_ma_sp,
-
-        v_kho_xuat,
-
-        v_kho_nhap,
-
-        p_so_luong_xuat,
-
-        0,
-
-        p_so_luong_xuat,
-
-        'IN_TRANSIT',
-
-        CURRENT_TIMESTAMP,
-
-        CURRENT_TIMESTAMP
-
+        p_saga_id, p_ma_phieu_dc, v_ma_sp, v_kho_xuat, v_kho_nhap, p_so_luong_xuat, 0, p_so_luong_xuat, 'IN_TRANSIT', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP
     )
-
-    RETURNING vwh_id
-    INTO v_vwh_id;
-
+    RETURNING vwh_id INTO v_vwh_id;
 
     -- ========================================================
-    -- 10. UPDATE SAGA
+    -- 5. UPDATE SAGA
     -- ========================================================
-
     UPDATE saga_transaction
-
-    SET
-
-        so_luong_da_xuat =
-            so_luong_da_xuat + p_so_luong_xuat,
-
-        current_state = 'IN_TRANSIT',
-
-        updated_at = CURRENT_TIMESTAMP
-
+    SET so_luong_da_xuat = so_luong_da_xuat + p_so_luong_xuat, current_state = 'IN_TRANSIT', updated_at = CURRENT_TIMESTAMP
     WHERE saga_id = p_saga_id;
-
-
-    -- ========================================================
-    -- 11. UPDATE MONITORING
-    -- ========================================================
 
     UPDATE saga_monitoring
-
-    SET
-
-        so_luong_da_xuat =
-            so_luong_da_xuat + p_so_luong_xuat,
-
-        current_state = 'IN_TRANSIT',
-
-        last_event_type = 'TRANSFER_SHIPPED',
-
-        last_event_at = CURRENT_TIMESTAMP,
-
-        updated_at = CURRENT_TIMESTAMP,
-
-        error_message = NULL
-
+    SET so_luong_da_xuat = so_luong_da_xuat + p_so_luong_xuat, current_state = 'IN_TRANSIT', last_event_type = 'TRANSFER_SHIPPED', last_event_at = CURRENT_TIMESTAMP, updated_at = CURRENT_TIMESTAMP, error_message = NULL
     WHERE saga_id = p_saga_id;
 
-
-    RAISE NOTICE
-        'Tạo VWH thành công: vwh_id=%, phiếu=%, SP=%, SL=%',
-        v_vwh_id,
-        p_ma_phieu_dc,
-        v_ma_sp,
-        p_so_luong_xuat;
-
-
+    RAISE NOTICE 'Tạo VWH thành công: vwh_id=%, phiếu=%, SP=%, SL=%', v_vwh_id, p_ma_phieu_dc, v_ma_sp, p_so_luong_xuat;
     RETURN v_vwh_id;
+END;
+$$;
 
+-- ============================================================
+-- LEGACY PROXY
+-- ============================================================
+CREATE OR REPLACE FUNCTION sp_create_vwh_transfer(
+    p_saga_id UUID,
+    p_global_id UUID,
+    p_ma_phieu_dc VARCHAR(20),
+    p_so_luong_xuat INT
+)
+RETURNS BIGINT
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_partial_payload JSONB;
+BEGIN
+    v_partial_payload := jsonb_build_object(
+        'saga_id', p_saga_id,
+        'ma_giao_dich_global', p_global_id,
+        'ma_phieu_dc', p_ma_phieu_dc,
+        'so_luong', p_so_luong_xuat
+    );
+    RETURN sp_create_vwh_transfer(gen_random_uuid(), v_partial_payload, p_saga_id, p_global_id, p_ma_phieu_dc, p_so_luong_xuat);
 END;
 $$;
 

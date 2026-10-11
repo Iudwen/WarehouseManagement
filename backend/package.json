@@ -5,7 +5,8 @@
   "scripts": {
     "build": "tsc",
     "start": "node dist/app.js",
-    "dev": "ts-node-dev --respawn --transpile-only --exit-child src/app.ts"
+    "dev": "ts-node-dev --respawn --transpile-only --exit-child src/app.ts",
+    "worker": "ts-node src/workers/outboxWorker.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

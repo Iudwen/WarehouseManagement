@@ -128,6 +128,24 @@ def get_warehouses(node_conn):
 
 
 # ============================================================
+# 1.5. LẤY THÔNG TIN NHÓM SẢN PHẨM
+# ============================================================
+
+def get_product_groups(node_conn):
+
+    sql = """
+        SELECT
+            ma_nhom,
+            ten_nhom
+        FROM nhom_san_pham
+    """
+
+    with node_conn.cursor() as cursor:
+        cursor.execute(sql)
+        return cursor.fetchall()
+
+
+# ============================================================
 # 2. LẤY THÔNG TIN SẢN PHẨM
 # ============================================================
 
@@ -450,6 +468,37 @@ def sync_warehouses(
                     node_config["port"]
                 )
             )
+
+    central_conn.commit()
+
+
+# ============================================================
+# 9.5. ĐỒNG BỘ NHÓM SẢN PHẨM
+# ============================================================
+
+def sync_product_groups(
+    central_conn,
+    product_groups
+):
+
+    sql = """
+        INSERT INTO nhom_san_pham (
+            ma_nhom,
+            ten_nhom
+        )
+        VALUES (
+            %s,
+            %s
+        )
+        ON CONFLICT (ma_nhom)
+        DO UPDATE SET
+            ten_nhom = EXCLUDED.ten_nhom
+    """
+
+    with central_conn.cursor() as cursor:
+
+        for group in product_groups:
+            cursor.execute(sql, group)
 
     central_conn.commit()
 
@@ -920,6 +969,12 @@ def sync_node(
             f"[DATA] Số kho: {len(warehouses)}"
         )
 
+        product_groups = get_product_groups(node_conn)
+
+        print(
+            f"[DATA] Số nhóm sản phẩm: {len(product_groups)}"
+        )
+
         products = get_products(node_conn)
 
         print(
@@ -946,6 +1001,7 @@ def sync_node(
 
         records_processed = (
             len(warehouses)
+            + len(product_groups)
             + len(products)
             + len(inventory)
             + len(purchases)
@@ -960,6 +1016,15 @@ def sync_node(
 
         print(
             "[SYNC] Bảng kho: OK"
+        )
+
+        sync_product_groups(
+            central_conn,
+            product_groups
+        )
+
+        print(
+            "[SYNC] Bảng nhóm sản phẩm: OK"
         )
 
         sync_products(

@@ -949,6 +949,8 @@
 -- ============================================================
 
 CREATE OR REPLACE FUNCTION sp_process_transfer_received(
+    p_event_id UUID,
+    p_payload JSONB,
     p_saga_id UUID,
     p_global_id UUID,
     p_ma_phieu_dc VARCHAR(20),
@@ -958,10 +960,10 @@ RETURNS VOID
 LANGUAGE plpgsql
 AS $$
 DECLARE
+    v_ext_payload JSONB;
+
     v_global_id UUID;
-
     v_so_luong_da_xuat INT;
-
     v_vwh_id BIGINT;
     v_ma_sp VARCHAR(20);
     v_kho_xuat VARCHAR(10);
@@ -969,350 +971,160 @@ DECLARE
     v_so_luong_xuat INT;
     v_da_nhan_hien_tai INT;
     v_dang_van_chuyen INT;
-
     v_chenh_lech INT;
 BEGIN
 
     -- ========================================================
-    -- 1. VALIDATE INPUT
+    -- 0. KIỂM TRA TÍNH NHẤT QUÁN CỦA PAYLOAD VÀ THAM SỐ
     -- ========================================================
+    IF p_payload IS NULL THEN
+        RAISE EXCEPTION 'Payload is null' USING ERRCODE = 'U0003';
+    END IF;
 
+    IF (p_payload->>'saga_id')::UUID IS DISTINCT FROM p_saga_id
+       OR (p_payload->>'ma_giao_dich_global')::UUID IS DISTINCT FROM p_global_id
+       OR (p_payload->>'ma_phieu_dc') IS DISTINCT FROM p_ma_phieu_dc
+       OR (p_payload->>'so_luong_thuc_nhan')::INT IS DISTINCT FROM p_so_luong_thuc_nhan THEN
+        RAISE EXCEPTION 'Payload data missing or mismatch' USING ERRCODE = 'U0003';
+    END IF;
+
+    -- ========================================================
+    -- 1. SUBTRANSACTION IDEMPOTENCY
+    -- ========================================================
+    BEGIN
+        INSERT INTO processed_event (event_id, source_node, event_type, payload, status)
+        VALUES (p_event_id, COALESCE(p_payload->>'kho_nhap', 'UNKNOWN'), 'TRANSFER_RECEIVED', p_payload, 'SUCCESS');
+    EXCEPTION WHEN unique_violation THEN
+        SELECT payload INTO v_ext_payload FROM processed_event WHERE event_id = p_event_id;
+        IF v_ext_payload = p_payload THEN
+            RETURN;
+        ELSE
+            RAISE EXCEPTION 'Payload conflict for event %', p_event_id USING ERRCODE = 'U0003';
+        END IF;
+    END;
+
+    -- ========================================================
+    -- 2. KHÓA SAGA & VALIDATE
+    -- ========================================================
     IF p_saga_id IS NULL THEN
-        RAISE EXCEPTION
-            'saga_id không được NULL';
+        RAISE EXCEPTION 'saga_id không được NULL';
     END IF;
 
     IF p_global_id IS NULL THEN
-        RAISE EXCEPTION
-            'global_id không được NULL';
+        RAISE EXCEPTION 'global_id không được NULL';
     END IF;
 
-    IF p_ma_phieu_dc IS NULL
-       OR TRIM(p_ma_phieu_dc) = '' THEN
-
-        RAISE EXCEPTION
-            'ma_phieu_dc không được NULL hoặc rỗng';
+    IF p_ma_phieu_dc IS NULL OR TRIM(p_ma_phieu_dc) = '' THEN
+        RAISE EXCEPTION 'ma_phieu_dc không được NULL hoặc rỗng';
     END IF;
 
-    IF p_so_luong_thuc_nhan IS NULL
-       OR p_so_luong_thuc_nhan <= 0 THEN
-
-        RAISE EXCEPTION
-            'Số lượng thực nhận phải lớn hơn 0';
+    IF p_so_luong_thuc_nhan IS NULL OR p_so_luong_thuc_nhan <= 0 THEN
+        RAISE EXCEPTION 'Số lượng thực nhận phải lớn hơn 0';
     END IF;
 
-
-    -- ========================================================
-    -- 2. KHÓA SAGA
-    -- ========================================================
-
-    SELECT
-        ma_giao_dich_global,
-        so_luong_da_xuat
-    INTO
-        v_global_id,
-        v_so_luong_da_xuat
+    SELECT ma_giao_dich_global, so_luong_da_xuat
+    INTO v_global_id, v_so_luong_da_xuat
     FROM saga_transaction
-    WHERE saga_id = p_saga_id
-      AND ma_phieu_dc = p_ma_phieu_dc
+    WHERE saga_id = p_saga_id AND ma_phieu_dc = p_ma_phieu_dc
     FOR UPDATE;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION
-            'Không tìm thấy Saga cho phiếu %',
-            p_ma_phieu_dc;
+        RAISE EXCEPTION 'Không tìm thấy Saga cho phiếu %', p_ma_phieu_dc;
     END IF;
-
-
-    -- ========================================================
-    -- 3. KIỂM TRA GLOBAL ID
-    -- ========================================================
 
     IF v_global_id <> p_global_id THEN
-        RAISE EXCEPTION
-            'global_id không khớp với Saga %',
-            p_saga_id;
+        RAISE EXCEPTION 'global_id không khớp với Saga %', p_saga_id;
     END IF;
-
-
-    -- ========================================================
-    -- 4. KIỂM TRA SỐ LƯỢNG
-    -- ========================================================
 
     IF p_so_luong_thuc_nhan > v_so_luong_da_xuat THEN
-        RAISE EXCEPTION
-            'Số lượng thực nhận (%) lớn hơn số lượng đã xuất (%)',
-            p_so_luong_thuc_nhan,
-            v_so_luong_da_xuat;
+        RAISE EXCEPTION 'Số lượng thực nhận (%) lớn hơn số lượng đã xuất (%)', p_so_luong_thuc_nhan, v_so_luong_da_xuat;
     END IF;
 
-
     -- ========================================================
-    -- 5. KHÓA VWH
+    -- 3. KHÓA VWH
     -- ========================================================
-
-    SELECT
-    vwh_id,
-    ma_sp,
-    kho_xuat,
-    kho_nhap,
-    so_luong_xuat,
-    so_luong_da_nhan,
-    so_luong_dang_van_chuyen
-INTO
-    v_vwh_id,
-    v_ma_sp,
-    v_kho_xuat,
-    v_kho_nhap,
-    v_so_luong_xuat,
-    v_da_nhan_hien_tai,
-    v_dang_van_chuyen
-FROM vwh_transfer
-WHERE saga_id = p_saga_id
-  AND ma_phieu_dc = p_ma_phieu_dc
-FOR UPDATE;
+    SELECT vwh_id, ma_sp, kho_xuat, kho_nhap, so_luong_xuat, so_luong_da_nhan, so_luong_dang_van_chuyen
+    INTO v_vwh_id, v_ma_sp, v_kho_xuat, v_kho_nhap, v_so_luong_xuat, v_da_nhan_hien_tai, v_dang_van_chuyen
+    FROM vwh_transfer
+    WHERE saga_id = p_saga_id AND ma_phieu_dc = p_ma_phieu_dc
+    FOR UPDATE;
 
     IF NOT FOUND THEN
-        RAISE EXCEPTION
-            'Không tìm thấy VWH cho phiếu %',
-            p_ma_phieu_dc;
+        RAISE EXCEPTION 'Không tìm thấy VWH cho phiếu %', p_ma_phieu_dc USING ERRCODE = 'U0001';
     END IF;
-
-
-    -- ========================================================
-    -- 6. KIỂM TRA KHÔNG NHẬN QUÁ SỐ ĐANG VẬN CHUYỂN
-    -- ========================================================
 
     IF p_so_luong_thuc_nhan > v_dang_van_chuyen THEN
-        RAISE EXCEPTION
-            'Số lượng thực nhận (%) lớn hơn số lượng đang vận chuyển (%)',
-            p_so_luong_thuc_nhan,
-            v_dang_van_chuyen;
+        RAISE EXCEPTION 'Số lượng thực nhận (%) lớn hơn số lượng đang vận chuyển (%)', p_so_luong_thuc_nhan, v_dang_van_chuyen;
     END IF;
 
-
     -- ========================================================
-    -- 7. TÍNH CHÊNH LỆCH
+    -- 4. TÍNH CHÊNH LỆCH VÀ CẬP NHẬT
     -- ========================================================
-
-    v_chenh_lech :=
-        v_so_luong_xuat
-        -
-        (
-            v_da_nhan_hien_tai
-            + p_so_luong_thuc_nhan
-        );
-
-
-    -- ========================================================
-    -- 8. CẬP NHẬT VWH
-    -- ========================================================
+    v_chenh_lech := v_so_luong_xuat - (v_da_nhan_hien_tai + p_so_luong_thuc_nhan);
 
     UPDATE vwh_transfer
-    SET
-        so_luong_da_nhan =
-            so_luong_da_nhan
-            + p_so_luong_thuc_nhan,
-
-        so_luong_dang_van_chuyen =
-            so_luong_dang_van_chuyen
-            - p_so_luong_thuc_nhan,
-
-        trang_thai =
-            CASE
-                WHEN
-                    so_luong_dang_van_chuyen
-                    - p_so_luong_thuc_nhan = 0
-                THEN 'RECEIVED'
-
-                ELSE 'DISCREPANCY'
-            END,
-
-        received_at =
-            CASE
-                WHEN
-                    so_luong_dang_van_chuyen
-                    - p_so_luong_thuc_nhan = 0
-                THEN CURRENT_TIMESTAMP
-
-                ELSE received_at
-            END,
-
+    SET so_luong_da_nhan = so_luong_da_nhan + p_so_luong_thuc_nhan,
+        so_luong_dang_van_chuyen = so_luong_dang_van_chuyen - p_so_luong_thuc_nhan,
+        trang_thai = CASE WHEN so_luong_dang_van_chuyen - p_so_luong_thuc_nhan = 0 THEN 'RECEIVED' ELSE 'DISCREPANCY' END,
+        received_at = CASE WHEN so_luong_dang_van_chuyen - p_so_luong_thuc_nhan = 0 THEN CURRENT_TIMESTAMP ELSE received_at END,
         updated_at = CURRENT_TIMESTAMP
-
     WHERE vwh_id = v_vwh_id;
 
--- ========================================================
--- TẠO TRANSFER DISCREPANCY
--- ========================================================
-
-IF v_chenh_lech > 0 THEN
-
-    INSERT INTO transfer_discrepancy (
-        saga_id,
-        vwh_id,
-        ma_phieu_dc,
-        ma_sp,
-        kho_xuat,
-        kho_nhap,
-        so_luong_xuat,
-        so_luong_thuc_nhan,
-        so_luong_chenh_lech,
-        ly_do,
-        trang_thai
-    )
-    VALUES (
-        p_saga_id,
-        v_vwh_id,
-        p_ma_phieu_dc,
-        v_ma_sp,
-        v_kho_xuat,
-        v_kho_nhap,
-        v_so_luong_xuat,
-        v_da_nhan_hien_tai + p_so_luong_thuc_nhan,
-        v_chenh_lech,
-        'Chênh lệch giữa số lượng xuất và thực nhận',
-        'PENDING'
-    );
-
-END IF;
-    -- ========================================================
-    -- 9. CẬP NHẬT SAGA TRANSACTION
-    -- ========================================================
+    IF v_chenh_lech > 0 THEN
+        INSERT INTO transfer_discrepancy (saga_id, vwh_id, ma_phieu_dc, ma_sp, kho_xuat, kho_nhap, so_luong_xuat, so_luong_thuc_nhan, so_luong_chenh_lech, ly_do, trang_thai)
+        VALUES (p_saga_id, v_vwh_id, p_ma_phieu_dc, v_ma_sp, v_kho_xuat, v_kho_nhap, v_so_luong_xuat, v_da_nhan_hien_tai + p_so_luong_thuc_nhan, v_chenh_lech, 'Chênh lệch', 'PENDING');
+    END IF;
 
     UPDATE saga_transaction
-    SET
-        so_luong_thuc_nhan =
-            so_luong_thuc_nhan
-            + p_so_luong_thuc_nhan,
-
-        so_luong_chenh_lech =
-            GREATEST(
-                0,
-                so_luong_yeu_cau
-                -
-                (
-                    so_luong_thuc_nhan
-                    + p_so_luong_thuc_nhan
-                )
-            ),
-
-        current_state =
-            CASE
-                WHEN
-                    so_luong_thuc_nhan
-                    + p_so_luong_thuc_nhan
-                    = so_luong_yeu_cau
-                THEN 'COMPLETED'
-
-                ELSE 'RECEIVED_WITH_DISCREPANCY'
-            END,
-
-        -- SUCCESS mới là trạng thái hoàn thành hợp lệ
-        -- của cột status.
-        status =
-            CASE
-                WHEN
-                    so_luong_thuc_nhan
-                    + p_so_luong_thuc_nhan
-                    = so_luong_yeu_cau
-                THEN 'SUCCESS'
-
-                ELSE 'RUNNING'
-            END,
-
-        completed_at =
-            CASE
-                WHEN
-                    so_luong_thuc_nhan
-                    + p_so_luong_thuc_nhan
-                    = so_luong_yeu_cau
-                THEN CURRENT_TIMESTAMP
-
-                ELSE completed_at
-            END,
-
+    SET so_luong_thuc_nhan = so_luong_thuc_nhan + p_so_luong_thuc_nhan,
+        so_luong_chenh_lech = GREATEST(0, so_luong_yeu_cau - (so_luong_thuc_nhan + p_so_luong_thuc_nhan)),
+        current_state = CASE WHEN so_luong_thuc_nhan + p_so_luong_thuc_nhan = so_luong_yeu_cau THEN 'COMPLETED' ELSE 'RECEIVED_WITH_DISCREPANCY' END,
+        status = CASE WHEN so_luong_thuc_nhan + p_so_luong_thuc_nhan = so_luong_yeu_cau THEN 'SUCCESS' ELSE 'RUNNING' END,
+        completed_at = CASE WHEN so_luong_thuc_nhan + p_so_luong_thuc_nhan = so_luong_yeu_cau THEN CURRENT_TIMESTAMP ELSE completed_at END,
         updated_at = CURRENT_TIMESTAMP
-
     WHERE saga_id = p_saga_id;
-
-
-    -- ========================================================
-    -- 10. CẬP NHẬT PHIẾU ĐIỀU CHUYỂN CENTRAL
-    -- ========================================================
 
     UPDATE dieu_chuyen_central
-    SET
-        trang_thai =
-            CASE
-                WHEN v_chenh_lech = 0
-                THEN 'HOAN_THANH'
-
-                ELSE 'CHENH_LECH'
-            END
-
+    SET trang_thai = CASE WHEN v_chenh_lech = 0 THEN 'HOAN_THANH' ELSE 'CHENH_LECH' END
     WHERE ma_phieu_dc = p_ma_phieu_dc;
 
-
-    -- ========================================================
-    -- 11. CẬP NHẬT SAGA MONITORING
-    -- ========================================================
-
     UPDATE saga_monitoring
-    SET
-        current_state =
-            CASE
-                WHEN v_chenh_lech = 0
-                THEN 'COMPLETED'
-
-                ELSE 'RECEIVED_WITH_DISCREPANCY'
-            END,
-
-        -- SUCCESS mới là trạng thái hoàn thành hợp lệ.
-        status =
-            CASE
-                WHEN v_chenh_lech = 0
-                THEN 'SUCCESS'
-
-                ELSE 'RUNNING'
-            END,
-
-        so_luong_thuc_nhan =
-            so_luong_thuc_nhan
-            + p_so_luong_thuc_nhan,
-
-        so_luong_chenh_lech =
-            GREATEST(
-                0,
-                so_luong_yeu_cau
-                -
-                (
-                    so_luong_thuc_nhan
-                    + p_so_luong_thuc_nhan
-                )
-            ),
-
+    SET current_state = CASE WHEN v_chenh_lech = 0 THEN 'COMPLETED' ELSE 'RECEIVED_WITH_DISCREPANCY' END,
+        status = CASE WHEN v_chenh_lech = 0 THEN 'SUCCESS' ELSE 'RUNNING' END,
+        so_luong_thuc_nhan = so_luong_thuc_nhan + p_so_luong_thuc_nhan,
+        so_luong_chenh_lech = GREATEST(0, so_luong_yeu_cau - (so_luong_thuc_nhan + p_so_luong_thuc_nhan)),
         last_event_type = 'TRANSFER_RECEIVED',
-
         last_event_at = CURRENT_TIMESTAMP,
-
         updated_at = CURRENT_TIMESTAMP,
-
         error_message = NULL
-
     WHERE saga_id = p_saga_id;
 
+    RAISE NOTICE 'Xử lý RECEIVE thành công: phiếu=%, nhận=%, chênh lệch=%', p_ma_phieu_dc, p_so_luong_thuc_nhan, v_chenh_lech;
+END;
+$$;
 
-    -- ========================================================
-    -- 12. LOG
-    -- ========================================================
-
-    RAISE NOTICE
-        'Xử lý RECEIVE thành công: phiếu=%, nhận=%, chênh lệch=%',
-        p_ma_phieu_dc,
-        p_so_luong_thuc_nhan,
-        v_chenh_lech;
-
+-- ============================================================
+-- LEGACY PROXY
+-- ============================================================
+CREATE OR REPLACE FUNCTION sp_process_transfer_received(
+    p_saga_id UUID,
+    p_global_id UUID,
+    p_ma_phieu_dc VARCHAR(20),
+    p_so_luong_thuc_nhan INT
+)
+RETURNS VOID
+LANGUAGE plpgsql
+AS $$
+DECLARE
+    v_partial_payload JSONB;
+BEGIN
+    v_partial_payload := jsonb_build_object(
+        'saga_id', p_saga_id,
+        'ma_giao_dich_global', p_global_id,
+        'ma_phieu_dc', p_ma_phieu_dc,
+        'so_luong_thuc_nhan', p_so_luong_thuc_nhan
+    );
+    PERFORM sp_process_transfer_received(gen_random_uuid(), v_partial_payload, p_saga_id, p_global_id, p_ma_phieu_dc, p_so_luong_thuc_nhan);
 END;
 $$;
 

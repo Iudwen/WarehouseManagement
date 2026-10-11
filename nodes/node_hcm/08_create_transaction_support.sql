@@ -160,6 +160,9 @@ CREATE TABLE IF NOT EXISTS outbox_event (
     status VARCHAR(20) NOT NULL
         DEFAULT 'PENDING',
 
+    version INT NOT NULL
+        DEFAULT 1,
+
     retry_count INT NOT NULL
         DEFAULT 0,
 

@@ -1,4 +1,4 @@
-import { pools } from '../config/postgresql';
+import { pools, getDbPool } from '../config/postgresql';
 
 import {
   findTransferById,
@@ -10,6 +10,8 @@ import {
 
 import {
   acceptTransfer,
+  shipTransfer as shipTransferRepo,
+  receiveTransfer as receiveTransferRepo,
 } from '../repositories/nodeTransferRepository';
 
 export interface TransferPayload {
@@ -116,7 +118,7 @@ export const approveTransfer = async (
 
     const sagaId = await createSaga(
       client,
-      maPhieuDc
+      transfer
     );
 
     await client.query('COMMIT');
@@ -189,17 +191,25 @@ export const shipTransfer = async (
     );
   }
 
-  /*
-   * TODO:
-   * Bước này cần xác định chính xác cơ chế node nguồn
-   * xuất hàng và function/procedure tương ứng.
-   *
-   * Chưa được tự ý trừ tồn kho ở CENTRAL.
-   */
+  const sourceNodePool = getDbPool(saga.kho_xuat);
 
-  throw new Error(
-    'Chưa triển khai nghiệp vụ xuất điều chuyển tại node nguồn'
-  );
+  await shipTransferRepo(sourceNodePool, {
+    saga_id: saga.saga_id,
+    global_id: saga.ma_giao_dich_global,
+    ma_phieu_dc: saga.ma_phieu_dc,
+    ma_kho: saga.kho_xuat,
+    ma_sp: saga.ma_sp,
+  });
+
+  return {
+    success: true,
+    ma_phieu_dc: saga.ma_phieu_dc,
+    saga_id: saga.saga_id,
+    global_id: saga.ma_giao_dich_global,
+    ma_kho: saga.kho_xuat,
+    event_type: 'TRANSFER_SHIPPED',
+    status: 'SHIPPED_PENDING_RELAY',
+  };
 };
 
 export const receiveTransfer = async (
@@ -258,15 +268,26 @@ export const receiveTransfer = async (
     );
   }
 
-  /*
-   * TODO:
-   * Cần xác định function/procedure nhận hàng trong Saga SQL
-   * trước khi cập nhật COMPLETED.
-   */
+  const destNodePool = getDbPool(saga.kho_nhap);
 
-  throw new Error(
-    'Chưa triển khai nghiệp vụ nhận điều chuyển tại node đích'
-  );
+  await receiveTransferRepo(destNodePool, {
+    saga_id: saga.saga_id,
+    global_id: saga.ma_giao_dich_global,
+    ma_phieu_dc: saga.ma_phieu_dc,
+    ma_kho: saga.kho_nhap,
+    ma_sp: saga.ma_sp,
+    so_luong_thuc_nhan: transfer.so_luong, // Assuming full quantity received for now, or get from request body if available
+  });
+
+  return {
+    success: true,
+    ma_phieu_dc: saga.ma_phieu_dc,
+    saga_id: saga.saga_id,
+    global_id: saga.ma_giao_dich_global,
+    ma_kho: saga.kho_nhap,
+    event_type: 'TRANSFER_RECEIVED',
+    status: 'RECEIVED_PENDING_RELAY',
+  };
 };
 export const confirmSourceTransfer = async (
   maPhieuDc: string,
@@ -300,7 +321,10 @@ export const confirmSourceTransfer = async (
       `Saga không ở trạng thái chờ kho nguồn xác nhận: ${saga.current_state}`
     );
   }
-  await acceptTransfer(pool, {
+
+  const sourceNodePool = getDbPool(saga.kho_xuat);
+
+  await acceptTransfer(sourceNodePool, {
     saga_id: saga.saga_id,
     global_id: saga.ma_giao_dich_global,
     ma_phieu_dc: saga.ma_phieu_dc,
@@ -308,6 +332,7 @@ export const confirmSourceTransfer = async (
     ma_sp: saga.ma_sp,
     so_luong: saga.so_luong_yeu_cau,
   });
+
   return {
     success: true,
     ma_phieu_dc: saga.ma_phieu_dc,

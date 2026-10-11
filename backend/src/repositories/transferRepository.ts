@@ -132,26 +132,50 @@ export const updateTransferStatus = async (
 
 export const createSaga = async (
   client: PoolClient,
-  maPhieuDc: string
+  transfer: TransferRecord
 ): Promise<{
   saga_id: string;
   global_id: string;
 }> => {
   const result = await client.query(
     `
+    INSERT INTO saga_transaction (
+      ma_giao_dich_global,
+      ma_phieu_dc,
+      kho_xuat,
+      kho_nhap,
+      ma_sp,
+      so_luong_yeu_cau,
+      source_node,
+      destination_node,
+      current_state,
+      status
+    )
     SELECT
-      saga_id,
-      ma_giao_dich_global
-    FROM saga_transaction
-    WHERE ma_phieu_dc = $1
-    LIMIT 1
+      gen_random_uuid(),
+      $1::varchar,
+      $2::varchar,
+      $3::varchar,
+      $4::varchar,
+      $5::int,
+      (SELECT node_name FROM kho WHERE ma_kho = $2::varchar),
+      (SELECT node_name FROM kho WHERE ma_kho = $3::varchar),
+      'WAITING_SOURCE_CONFIRMATION',
+      'RUNNING'
+    RETURNING saga_id, ma_giao_dich_global
     `,
-    [maPhieuDc]
+    [
+      transfer.ma_phieu_dc,
+      transfer.kho_xuat,
+      transfer.kho_nhap,
+      transfer.ma_sp,
+      transfer.so_luong
+    ]
   );
 
   if (!result.rows[0]) {
     throw new Error(
-      `Không tìm thấy Saga cho phiếu ${maPhieuDc}`
+      `Lỗi khi tạo Saga cho phiếu ${transfer.ma_phieu_dc}`
     );
   }
 
