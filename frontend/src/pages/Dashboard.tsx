@@ -1,13 +1,12 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useWarehouse } from '../contexts/WarehouseContext';
-import type { StockItem, MongoEventLog, LowStockAlert } from '../types';
+import type { StockItem, LowStockAlert } from '../types';
 import { Package, ArrowDownLeft, ArrowUpRight, AlertTriangle } from 'lucide-react';
 
 export default function Dashboard() {
   const { selectedWarehouse } = useWarehouse();
   const [stocks, setStocks] = useState<StockItem[]>([]);
-  const [logs, setLogs] = useState<MongoEventLog[]>([]);
   const [alerts, setAlerts] = useState<LowStockAlert[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -19,7 +18,6 @@ export default function Dashboard() {
         api.get(`/alerts/low-stock?ma_kho=${selectedWarehouse}`),
       ]);
       setStocks(resSummary.data.stocks || resSummary.data.san_pham || []);
-      setLogs(resSummary.data.recentLogs || []);
       setAlerts(resAlerts.data.alerts || []);
     } catch (err) {
       console.error('Lỗi load Dashboard:', err);

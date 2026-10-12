@@ -40,3 +40,12 @@ export interface ExportPayload {
   ma_kh: string;
   items: InventoryItemInput[];
 }
+
+export interface ReceiveItemInput {
+  ma_sp: string;
+  so_luong_thuc_nhan: number;
+}
+
+export interface ConfirmReceivePayload {
+  items?: ReceiveItemInput[];
+}

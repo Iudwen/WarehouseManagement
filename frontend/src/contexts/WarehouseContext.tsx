@@ -1,9 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+import React, { createContext, useContext, useState, useEffect, type ReactNode } from 'react';
 import { useAuth } from './AuthContext';
 
 interface WarehouseContextType {
   selectedWarehouse: string;
   setSelectedWarehouse: (wh: string) => void;
+  isWarehouseLocked: boolean;
 }
 
 const WarehouseContext = createContext<WarehouseContextType | undefined>(undefined);
@@ -11,28 +12,39 @@ const WarehouseContext = createContext<WarehouseContextType | undefined>(undefin
 export const WarehouseProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const { user } = useAuth();
 
-  // Thứ tự ưu tiên: 1. Kho đã chọn gần nhất (localStorage) -> 2. Kho mặc định của User -> 3. HN01
+  // Khóa đổi kho nếu tài khoản đã được gán kho cụ thể (nhân viên/quản lý chi nhánh)
+  const isWarehouseLocked = Boolean(user?.ma_kho);
+
   const [selectedWarehouse, setSelectedWarehouseState] = useState<string>(() => {
+    if (user?.ma_kho) return user.ma_kho;
     const savedWarehouse = localStorage.getItem('selectedWarehouse');
-    if (savedWarehouse) return savedWarehouse;
-    return user?.defaultWarehouse || 'HN01';
+    return savedWarehouse || 'HN01';
   });
 
-  // Tự động đồng bộ kho theo User khi vừa đăng nhập
+  // Tự động đồng bộ kho theo User khi vừa đăng nhập hoặc user thay đổi
   useEffect(() => {
-    if (user?.defaultWarehouse && !localStorage.getItem('selectedWarehouse')) {
-      setSelectedWarehouseState(user.defaultWarehouse);
+    if (user?.ma_kho) {
+      setSelectedWarehouseState(user.ma_kho);
+      localStorage.setItem('selectedWarehouse', user.ma_kho);
+    } else {
+      const savedWarehouse = localStorage.getItem('selectedWarehouse');
+      if (savedWarehouse) {
+        setSelectedWarehouseState(savedWarehouse);
+      }
     }
   }, [user]);
 
-  // Hàm setter tự động lưu vào localStorage khi đổi kho
+  // Hàm setter tự động lưu vào localStorage khi đổi kho (chỉ cho phép nếu không bị khóa)
   const setSelectedWarehouse = (wh: string) => {
+    if (isWarehouseLocked && user?.ma_kho) {
+      return;
+    }
     localStorage.setItem('selectedWarehouse', wh);
     setSelectedWarehouseState(wh);
   };
 
   return (
-    <WarehouseContext.Provider value={{ selectedWarehouse, setSelectedWarehouse }}>
+    <WarehouseContext.Provider value={{ selectedWarehouse, setSelectedWarehouse, isWarehouseLocked }}>
       {children}
     </WarehouseContext.Provider>
   );

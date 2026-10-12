@@ -5,6 +5,11 @@ import express, { Application, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import mongoose from 'mongoose';
 
+import fs from 'fs';
+import path from 'path';
+import swaggerUi from 'swagger-ui-express';
+import YAML from 'yamljs';
+
 import authRoutes from './routes/authRoutes';
 import inventoryRoutes from './routes/inventoryRoutes';
 import transferRoutes from './routes/transferRoutes';
@@ -18,10 +23,17 @@ const app: Application = express();
 app.use(cors());
 app.use(express.json());
 
+// Load Swagger document (hỗ trợ cả dev mode từ src/docs và production từ dist/docs)
+const swaggerPath = fs.existsSync(path.join(__dirname, 'docs/swagger.yaml'))
+  ? path.join(__dirname, 'docs/swagger.yaml')
+  : path.join(__dirname, '../src/docs/swagger.yaml');
+const swaggerDocument = YAML.load(swaggerPath);
+app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
+
 // Kết nối Mongo Event Log
 const mongoUri =
   process.env.MONGO_URI ||
-  'mongodb://localhost:65518/warehouse_events';
+  'mongodb://127.0.0.1:63606/warehouse_events';
 mongoose.connect(mongoUri)
   .then(() => console.log('🍃 MongoDB Event Logs Connected!'))
   .catch((err) => console.error('❌ Lỗi kết nối MongoDB:', err));

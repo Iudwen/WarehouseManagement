@@ -1,39 +1,41 @@
-import React, { createContext, useState, useContext, ReactNode } from 'react';
-
-interface User {
-  username: string;
-  role: string;
-  defaultWarehouse: string;
-}
+import React, { createContext, useState, useContext, type ReactNode } from 'react';
+import type { AuthUser } from '../types';
 
 interface AuthContextType {
-  user: User | null;
-  login: (userData: User, token: string) => void;
+  user: AuthUser | null;
+  token: string | null;
+  login: (userData: AuthUser, token: string) => void;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  const [user, setUser] = useState<User | null>(() => {
+  const [token, setToken] = useState<string | null>(() => {
+    return localStorage.getItem('token');
+  });
+
+  const [user, setUser] = useState<AuthUser | null>(() => {
     const savedUser = localStorage.getItem('user');
     return savedUser ? JSON.parse(savedUser) : null;
   });
 
-  const login = (userData: User, token: string) => {
+  const login = (userData: AuthUser, tokenValue: string) => {
     localStorage.setItem('user', JSON.stringify(userData));
-    localStorage.setItem('token', token);
+    localStorage.setItem('token', tokenValue);
     setUser(userData);
+    setToken(tokenValue);
   };
 
   const logout = () => {
     localStorage.removeItem('user');
     localStorage.removeItem('token');
     setUser(null);
+    setToken(null);
   };
 
   return (
-    <AuthContext.Provider value={{ user, login, logout }}>
+    <AuthContext.Provider value={{ user, token, login, logout }}>
       {children}
     </AuthContext.Provider>
   );

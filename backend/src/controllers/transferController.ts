@@ -1,4 +1,4 @@
-﻿import { Response } from 'express';
+import { Response } from 'express';
 import { CustomRequest } from '../types';
 import {
   processTransfer,
@@ -6,7 +6,51 @@ import {
   confirmSourceTransfer,
   shipTransfer,
   receiveTransfer,
+  listTransfers,
 } from '../services/transferService';
+
+export const handleListTransfers = async (
+  req: CustomRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { kho_xuat, kho_nhap, trang_thai, ma_kho } = req.query;
+
+    // Chuẩn hóa và validate query parameters (chỉ nhận string)
+    const filters: {
+      kho_xuat?: string;
+      kho_nhap?: string;
+      trang_thai?: string;
+      ma_kho?: string;
+    } = {};
+
+    if (typeof kho_xuat === 'string' && kho_xuat.trim()) {
+      filters.kho_xuat = kho_xuat.trim();
+    }
+    if (typeof kho_nhap === 'string' && kho_nhap.trim()) {
+      filters.kho_nhap = kho_nhap.trim();
+    }
+    if (typeof trang_thai === 'string' && trang_thai.trim()) {
+      filters.trang_thai = trang_thai.trim();
+    }
+    if (typeof ma_kho === 'string' && ma_kho.trim()) {
+      filters.ma_kho = ma_kho.trim();
+    }
+
+    const data = await listTransfers(filters);
+
+    res.status(200).json({
+      success: true,
+      count: data.length,
+      data,
+    });
+  } catch (err: any) {
+    console.error('List transfers error:', err);
+    res.status(500).json({
+      message: err.message || 'Lỗi lấy danh sách phiếu điều chuyển',
+    });
+  }
+};
 
 export const handleTransfer = async (
   req: CustomRequest,

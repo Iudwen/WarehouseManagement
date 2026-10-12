@@ -1,4 +1,3 @@
-import React from 'react';
 import { BrowserRouter, Routes, Route, useLocation } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import { WarehouseProvider } from './contexts/WarehouseContext';

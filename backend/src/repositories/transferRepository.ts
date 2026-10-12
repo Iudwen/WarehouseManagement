@@ -217,3 +217,93 @@ export const getSagaByTransferId = async (
 
   return result.rows[0] ?? null;
 };
+
+export interface TransferListItem {
+  id: string;
+  ma_phieu_dc: string;
+  kho_xuat: string;
+  ten_kho_xuat: string | null;
+  kho_nhap: string;
+  ten_kho_nhap: string | null;
+  ma_sp: string;
+  ten_sp: string | null;
+  don_vi: string | null;
+  so_luong: number;
+  trang_thai: string;
+  created_at: Date;
+  ngay_dieu_chuyen: Date | null;
+  saga_id: string | null;
+  saga_state: string | null;
+  saga_status: string | null;
+  so_luong_da_xuat: number | null;
+  so_luong_thuc_nhan: number | null;
+  error_message: string | null;
+}
+
+export const getTransferReceiptsList = async (
+  pool: Pool,
+  filters?: {
+    kho_xuat?: string;
+    kho_nhap?: string;
+    trang_thai?: string;
+    ma_kho?: string; // Hỗ trợ lọc phiếu liên quan đến kho (kho_xuat hoặc kho_nhap)
+  }
+): Promise<TransferListItem[]> => {
+  const conditions: string[] = [];
+  const params: any[] = [];
+
+  if (filters?.kho_xuat) {
+    params.push(filters.kho_xuat.trim().toUpperCase());
+    conditions.push(`dc.kho_xuat = $${params.length}`);
+  }
+
+  if (filters?.kho_nhap) {
+    params.push(filters.kho_nhap.trim().toUpperCase());
+    conditions.push(`dc.kho_nhap = $${params.length}`);
+  }
+
+  if (filters?.trang_thai) {
+    params.push(filters.trang_thai.trim().toUpperCase());
+    conditions.push(`dc.trang_thai = $${params.length}`);
+  }
+
+  if (filters?.ma_kho) {
+    params.push(filters.ma_kho.trim().toUpperCase());
+    conditions.push(`(dc.kho_xuat = $${params.length} OR dc.kho_nhap = $${params.length})`);
+  }
+
+  const whereClause = conditions.length > 0 ? `WHERE ${conditions.join(' AND ')}` : '';
+
+  const sql = `
+    SELECT
+      dc.id,
+      dc.ma_phieu_dc,
+      dc.kho_xuat,
+      kx.ten_kho AS ten_kho_xuat,
+      dc.kho_nhap,
+      kn.ten_kho AS ten_kho_nhap,
+      dc.ma_sp,
+      sp.ten_sp,
+      sp.don_vi,
+      dc.so_luong,
+      dc.trang_thai,
+      dc.created_at,
+      dc.ngay_dieu_chuyen,
+      s.saga_id,
+      s.current_state AS saga_state,
+      s.status AS saga_status,
+      s.so_luong_da_xuat,
+      s.so_luong_thuc_nhan,
+      s.error_message
+    FROM dieu_chuyen_central dc
+    LEFT JOIN san_pham sp ON dc.ma_sp = sp.ma_sp
+    LEFT JOIN kho kx ON dc.kho_xuat = kx.ma_kho
+    LEFT JOIN kho kn ON dc.kho_nhap = kn.ma_kho
+    LEFT JOIN saga_transaction s ON dc.ma_phieu_dc = s.ma_phieu_dc
+    ${whereClause}
+    ORDER BY dc.created_at DESC
+  `;
+
+  const result = await pool.query(sql, params);
+  return result.rows;
+};

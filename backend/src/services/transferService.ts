@@ -6,6 +6,8 @@ import {
   updateTransferStatus,
   createSaga,
   getSagaByTransferId,
+  getTransferReceiptsList,
+  TransferListItem,
 } from '../repositories/transferRepository';
 
 import {
@@ -341,4 +343,17 @@ export const confirmSourceTransfer = async (
     ma_kho: saga.kho_xuat,
     event_type: 'TRANSFER_ACCEPTED',
   };
+};
+
+/**
+ * Đọc danh sách phiếu điều chuyển từ database Central (kèm trạng thái Saga nếu có)
+ */
+export const listTransfers = async (filters?: {
+  kho_xuat?: string;
+  kho_nhap?: string;
+  trang_thai?: string;
+  ma_kho?: string;
+}): Promise<TransferListItem[]> => {
+  const pool = pools.CENTRAL;
+  return getTransferReceiptsList(pool, filters);
 };

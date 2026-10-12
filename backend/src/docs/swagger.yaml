@@ -1,0 +1,741 @@
+openapi: 3.0.0
+info:
+  title: Hệ Thống Quản Lý Kho Phân Tán (Warehouse Management API)
+  description: API tài liệu Swagger cho hệ thống Warehouse Management với PostgreSQL phân tán (HN, DN, HCM, Central) và MongoDB Audit Logs.
+  version: 1.0.0
+servers:
+  - url: http://localhost:5000/api/v1
+    description: Local Development Server
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - mat_khau
+      properties:
+        email:
+          type: string
+          example: "admin@warehouse.vn"
+        mat_khau:
+          type: string
+          example: "admin123"
+
+    LoginResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        token:
+          type: string
+        user:
+          type: object
+          properties:
+            ma_nguoi_dung:
+              type: string
+            ho_ten:
+              type: string
+            vai_tro:
+              type: string
+              example: "ADMIN"
+            ma_kho:
+              type: string
+              nullable: true
+              example: "HN01"
+
+    InventoryItemInput:
+      type: object
+      required:
+        - ma_sp
+        - so_luong
+        - don_gia
+      properties:
+        ma_sp:
+          type: string
+          example: "SP001"
+        so_luong:
+          type: integer
+          example: 20
+        don_gia:
+          type: number
+          example: 100000
+
+    CreateImportRequest:
+      type: object
+      required:
+        - ma_ncc
+        - items
+      properties:
+        ma_phieu_nhap:
+          type: string
+          description: Mã phiếu nhập (nếu không truyền hệ thống sẽ tự sinh)
+          example: "PN_HN01_001"
+        ma_kho:
+          type: string
+          example: "HN01"
+        ma_ncc:
+          type: string
+          example: "NCC001"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItemInput'
+
+    ConfirmReceiveRequest:
+      type: object
+      required:
+        - items
+      properties:
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - ma_sp
+              - so_luong_thuc_nhan
+            properties:
+              ma_sp:
+                type: string
+                example: "SP001"
+              so_luong_thuc_nhan:
+                type: integer
+                example: 12
+
+    AcceptShortageRequest:
+      type: object
+      properties:
+        ly_do:
+          type: string
+          example: "NCC hết hàng, chấp nhận chốt số lượng thực nhận"
+
+    RequestSupplementRequest:
+      type: object
+      properties:
+        ghi_chu:
+          type: string
+          example: "Yêu cầu NCC giao bổ sung phần hàng thiếu trong 3 ngày"
+
+    CreateExportRequest:
+      type: object
+      required:
+        - ma_kho
+        - items
+      properties:
+        ma_phieu_xuat:
+          type: string
+          example: "PX_HN01_001"
+        ma_kho:
+          type: string
+          example: "HN01"
+        items:
+          type: array
+          items:
+            $ref: '#/components/schemas/InventoryItemInput'
+
+    TransferCreateRequest:
+      type: object
+      required:
+        - kho_xuat
+        - kho_nhap
+        - items
+      properties:
+        kho_xuat:
+          type: string
+          example: "HN01"
+        kho_nhap:
+          type: string
+          example: "DN01"
+        items:
+          type: array
+          items:
+            type: object
+            required:
+              - ma_sp
+              - so_luong
+            properties:
+              ma_sp:
+                type: string
+                example: "SP001"
+              so_luong:
+                type: integer
+                example: 10
+
+security:
+  - bearerAuth: []
+
+paths:
+  # ---------------------------------------------------------------------------
+  # AUTH
+  # ---------------------------------------------------------------------------
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Đăng nhập hệ thống
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        200:
+          description: Đăng nhập thành công, trả về JWT Token
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        401:
+          description: Thông tin đăng nhập không hợp lệ
+
+  # ---------------------------------------------------------------------------
+  # INVENTORY - IMPORT (NHẬP KHO)
+  # ---------------------------------------------------------------------------
+  /inventory/import:
+    get:
+      tags:
+        - Nhập Kho (Import)
+      summary: Lấy danh sách phiếu nhập kho
+      description: Quyền NHAN_VIEN_KHO, QUAN_LY_KHO, ADMIN, DIEU_PHOI, DATA_ANALYST. Trả về danh sách phiếu nhập kèm chi tiết sản phẩm, nhà cung cấp và trạng thái vòng đời.
+      parameters:
+        - name: ma_kho
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Mã kho lọc (chỉ áp dụng cho role trung tâm ADMIN/DIEU_PHOI)
+        - name: trang_thai
+          in: query
+          required: false
+          schema:
+            type: string
+            enum: [CHO_DUYET, DA_DUYET, THIEU_HANG, CHO_GIAO_BO_SUNG, DA_NHAP, TU_CHOI]
+          description: Lọc theo trạng thái phiếu
+      responses:
+        200:
+          description: Danh sách phiếu nhập kho
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ma_phieu_nhap:
+                          type: string
+                        ma_kho:
+                          type: string
+                        ma_ncc:
+                          type: string
+                        ten_ncc:
+                          type: string
+                        ngay_nhap:
+                          type: string
+                        trang_thai:
+                          type: string
+                        tong_so_luong:
+                          type: integer
+                        tong_tien:
+                          type: number
+                        items:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              ma_sp:
+                                type: string
+                              ten_sp:
+                                type: string
+                              don_vi:
+                                type: string
+                              so_luong:
+                                type: integer
+                              don_gia:
+                                type: number
+    post:
+      tags:
+        - Nhập Kho (Import)
+      summary: Giai đoạn 1 - Nhân viên tạo phiếu nhập kho (CHO_DUYET)
+      description: Quyền NHAN_VIEN_KHO. Tạo phiếu nhập, kiểm tra hợp lệ nhà cung cấp và danh mục sản phẩm.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateImportRequest'
+      responses:
+        201:
+          description: Tạo phiếu thành công (CHO_DUYET)
+        400:
+          description: Dữ liệu không hợp lệ
+
+  /inventory/import/{maPhieu}/approve:
+    post:
+      tags:
+        - Nhập Kho (Import)
+      summary: Giai đoạn 1 - Quản lý duyệt phiếu nhập kho (DA_DUYET)
+      description: Quyền QUAN_LY_KHO. Duyệt phiếu nhập và có thể điều chỉnh lại số lượng nếu cần.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                items:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/InventoryItemInput'
+      responses:
+        200:
+          description: Duyệt phiếu thành công (DA_DUYET)
+
+  /inventory/import/{maPhieu}/reject:
+    post:
+      tags:
+        - Nhập Kho (Import)
+      summary: Giai đoạn 1 - Quản lý từ chối phiếu nhập kho (TU_CHOI)
+      description: Quyền QUAN_LY_KHO. Từ chối phiếu nhập kèm lý do.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ly_do:
+                  type: string
+                  example: "Chưa cần bổ sung mặt hàng này"
+      responses:
+        200:
+          description: Từ chối phiếu thành công
+
+  /inventory/import/{maPhieu}/confirm-receive:
+    post:
+      tags:
+        - Nhập Kho (Import)
+      summary: Giai đoạn 2 - Kiểm đếm thực tế và tiếp nhận hàng
+      description: Quyền NHAN_VIEN_KHO. Xác nhận số lượng thực nhận. Nếu nhận đủ -> DA_NHAP (hoàn tất); nếu nhận thiếu -> THIEU_HANG (chuyển quản lý xử lý chênh lệch). Tăng tồn kho và ghi sổ cái stock_ledger theo lượng thực nhận.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ConfirmReceiveRequest'
+      responses:
+        200:
+          description: Tiếp nhận đợt hàng thành công
+
+  /inventory/import/{maPhieu}/accept-shortage:
+    post:
+      tags:
+        - Nhập Kho (Import)
+      summary: Giai đoạn 3 (Nhánh A) - Quản lý chấp nhận thiếu hàng
+      description: Quyền QUAN_LY_KHO. Chốt số lượng phiếu theo số lượng thực tế đã nhận, chuyển trạng thái DA_NHAP (tương thích ETL Central).
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AcceptShortageRequest'
+      responses:
+        200:
+          description: Chấp nhận thiếu hàng và hoàn tất phiếu thành công
+
+  /inventory/import/{maPhieu}/request-supplement:
+    post:
+      tags:
+        - Nhập Kho (Import)
+      summary: Giai đoạn 3 (Nhánh B) - Quản lý yêu cầu NCC giao bổ sung
+      description: Quyền QUAN_LY_KHO. Chuyển phiếu sang trạng thái CHO_GIAO_BO_SUNG để tiếp nhận đợt hàng sau mà không cộng trùng.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RequestSupplementRequest'
+      responses:
+        200:
+          description: Yêu cầu giao bổ sung thành công
+
+  # ---------------------------------------------------------------------------
+  # INVENTORY - EXPORT (XUẤT KHO)
+  # ---------------------------------------------------------------------------
+  /inventory/export:
+    get:
+      tags:
+        - Xuất Kho (Export)
+      summary: Lấy danh sách phiếu xuất kho theo kho và trạng thái
+      description: Quyền NHAN_VIEN_KHO, QUAN_LY_KHO, ADMIN, DIEU_PHOI, DATA_ANALYST.
+      parameters:
+        - name: ma_kho
+          in: query
+          required: false
+          schema:
+            type: string
+        - name: trang_thai
+          in: query
+          required: false
+          schema:
+            type: string
+      responses:
+        200:
+          description: Trả về danh sách phiếu xuất kho
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        ma_phieu_xuat:
+                          type: string
+                        ma_kho:
+                          type: string
+                        ma_kh:
+                          type: string
+                        ten_kh:
+                          type: string
+                        ngay_xuat:
+                          type: string
+                        trang_thai:
+                          type: string
+                        tong_so_luong:
+                          type: integer
+                        tong_tien:
+                          type: number
+                        items:
+                          type: array
+                          items:
+                            type: object
+                            properties:
+                              ma_sp:
+                                type: string
+                              ten_sp:
+                                type: string
+                              don_vi:
+                                type: string
+                              so_luong:
+                                type: integer
+                              don_gia:
+                                type: number
+    post:
+      tags:
+        - Xuất Kho (Export)
+      summary: Giai đoạn 1 - Tạo yêu cầu xuất kho (CHO_DUYET)
+      description: Quyền NHAN_VIEN_KHO. Tạo phiếu xuất kho chờ duyệt.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateExportRequest'
+      responses:
+        201:
+          description: Tạo phiếu xuất thành công
+
+  /inventory/export/{maPhieu}/approve:
+    post:
+      tags:
+        - Xuất Kho (Export)
+      summary: Giai đoạn 2 - Quản lý duyệt phiếu xuất kho (DA_DUYET)
+      description: Quyền QUAN_LY_KHO. Kiểm tra tồn kho khả dụng trước khi duyệt.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Duyệt phiếu xuất thành công
+
+  /inventory/export/{maPhieu}/reject:
+    post:
+      tags:
+        - Xuất Kho (Export)
+      summary: Giai đoạn 2 - Quản lý từ chối phiếu xuất kho (TU_CHOI)
+      description: Quyền QUAN_LY_KHO.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Từ chối phiếu xuất thành công
+
+  /inventory/export/{maPhieu}/confirm-ship:
+    post:
+      tags:
+        - Xuất Kho (Export)
+      summary: Giai đoạn 3 - Nhân viên xác nhận xuất hàng thực tế (DA_XUAT)
+      description: Quyền NHAN_VIEN_KHO. Trừ tồn kho, ghi lịch sử tồn kho và ghi sổ cái stock_ledger (loai_giao_dich=XUAT, số lượng âm).
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Xuất hàng thành công (DA_XUAT)
+
+  # ---------------------------------------------------------------------------
+  # TRANSFER (ĐIỀU CHUYỂN KHO)
+  # ---------------------------------------------------------------------------
+  /transfer:
+    get:
+      tags:
+        - Điều Chuyển (Transfer)
+      summary: Lấy danh sách phiếu điều chuyển kèm trạng thái Saga
+      description: Quyền DIEU_PHOI, QUAN_LY_KHO, NHAN_VIEN_KHO, ADMIN, DATA_ANALYST. Truy vấn bảng điều chuyển Central và LEFT JOIN saga_transaction.
+      parameters:
+        - name: kho_xuat
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Lọc theo mã kho xuất (ví dụ HN01)
+        - name: kho_nhap
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Lọc theo mã kho nhập (ví dụ DN01)
+        - name: trang_thai
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Lọc theo trạng thái phiếu (PENDING, DANG_XU_LY, HOAN_TAT...)
+        - name: ma_kho
+          in: query
+          required: false
+          schema:
+            type: string
+          description: Lọc phiếu liên quan đến kho (kho xuất hoặc kho nhập)
+      responses:
+        200:
+          description: Trả về danh sách phiếu điều chuyển
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                  count:
+                    type: integer
+                  data:
+                    type: array
+                    items:
+                      type: object
+                      properties:
+                        id:
+                          type: string
+                        ma_phieu_dc:
+                          type: string
+                        kho_xuat:
+                          type: string
+                        ten_kho_xuat:
+                          type: string
+                        kho_nhap:
+                          type: string
+                        ten_kho_nhap:
+                          type: string
+                        ma_sp:
+                          type: string
+                        ten_sp:
+                          type: string
+                        don_vi:
+                          type: string
+                        so_luong:
+                          type: integer
+                        trang_thai:
+                          type: string
+                        created_at:
+                          type: string
+                        saga_id:
+                          type: string
+                        saga_state:
+                          type: string
+                        saga_status:
+                          type: string
+    post:
+      tags:
+        - Điều Chuyển (Transfer)
+      summary: Điều phối viên tạo yêu cầu điều chuyển
+      description: Quyền DIEU_PHOI. Tạo điều chuyển giữa các chi nhánh.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TransferCreateRequest'
+      responses:
+        201:
+          description: Tạo yêu cầu điều chuyển thành công
+
+  /transfer/{maPhieu}/approve:
+    post:
+      tags:
+        - Điều Chuyển (Transfer)
+      summary: Quản lý kho duyệt điều chuyển
+      description: Quyền QUAN_LY_KHO.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Duyệt điều chuyển thành công
+
+  /transfer/{maPhieu}/source-confirm:
+    post:
+      tags:
+        - Điều Chuyển (Transfer)
+      summary: Kho xuất xác nhận chuẩn bị chuyển hàng
+      description: Quyền NHAN_VIEN_KHO. Xác nhận hàng tại kho nguồn.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Xác nhận kho nguồn thành công
+
+  /transfer/{maPhieu}/source-ship:
+    post:
+      tags:
+        - Điều Chuyển (Transfer)
+      summary: Kho xuất xác nhận xuất hàng vận chuyển
+      description: Quyền NHAN_VIEN_KHO. Xuất hàng điều chuyển khỏi kho nguồn, chuyển trạng thái vận chuyển.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Xuất hàng điều chuyển thành công
+
+  /transfer/{maPhieu}/destination-receive:
+    post:
+      tags:
+        - Điều Chuyển (Transfer)
+      summary: Kho nhập xác nhận nhận hàng điều chuyển
+      description: Quyền NHAN_VIEN_KHO. Cộng tồn kho tại kho đích và hoàn tất điều chuyển.
+      parameters:
+        - name: maPhieu
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        200:
+          description: Hoàn tất nhận hàng điều chuyển
+
+  # ---------------------------------------------------------------------------
+  # MASTER DATA & DASHBOARD & AUDIT
+  # ---------------------------------------------------------------------------
+  /master-data:
+    get:
+      tags:
+        - Danh Mục (Master Data)
+      summary: Lấy dữ liệu danh mục (kho, sản phẩm, nhà cung cấp)
+      responses:
+        200:
+          description: Trả về danh sách master data
+
+  /dashboard/summary:
+    get:
+      tags:
+        - Thống Kê (Dashboard)
+      summary: Lấy dữ liệu tổng quan kho (tổng tồn kho, sản phẩm, biến động)
+      responses:
+        200:
+          description: Trả về dữ liệu dashboard
+
+  /alerts/low-stock:
+    get:
+      tags:
+        - Cảnh Báo (Alerts)
+      summary: Danh sách cảnh báo hàng dưới mức tồn an toàn / tối thiểu
+      responses:
+        200:
+          description: Danh sách cảnh báo
+
+  /audit/logs:
+    get:
+      tags:
+        - Nhật Ký Sự Kiện (MongoDB Audit)
+      summary: Lấy nhật ký sự kiện kho từ MongoDB (/audit/logs)
+      description: Quyền ADMIN, DIEU_PHOI, DATA_ANALYST, QUAN_LY_KHO.
+      responses:
+        200:
+          description: Danh sách log sự kiện
+
+  /audit/:
+    get:
+      tags:
+        - Nhật Ký Sự Kiện (MongoDB Audit)
+      summary: Lấy nhật ký sự kiện kho từ MongoDB (route gốc /audit/)
+      description: Quyền ADMIN, DIEU_PHOI, DATA_ANALYST, QUAN_LY_KHO (alias cho /audit/logs).
+      responses:
+        200:
+          description: Danh sách log sự kiện

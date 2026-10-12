@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import { useEffect, useState } from 'react';
 import api from '../services/api';
 import { useWarehouse } from '../contexts/WarehouseContext';
 import type { MongoEventLog } from '../types';

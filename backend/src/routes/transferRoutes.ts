@@ -1,6 +1,6 @@
-﻿import { Router } from 'express';
-
+import { Router } from 'express';
 import {
+  handleListTransfers,
   handleTransfer,
   handleApproveTransfer,
   handleConfirmSourceTransfer,
@@ -13,6 +13,14 @@ import { roleGuard } from '../middlewares/roleGuard';
 import { dbSelector } from '../middlewares/dbSelector';
 
 const router = Router();
+
+// Đọc danh sách phiếu điều chuyển (Áp dụng cho tất cả các vai trò liên quan)
+router.get(
+  '/',
+  auth,
+  roleGuard('DIEU_PHOI', 'QUAN_LY_KHO', 'NHAN_VIEN_KHO', 'ADMIN', 'DATA_ANALYST'),
+  handleListTransfers
+);
 
 router.post(
   '/',
