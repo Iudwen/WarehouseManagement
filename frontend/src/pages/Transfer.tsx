@@ -70,6 +70,12 @@ export default function Transfer() {
     text: '',
   });
 
+  // Bằng chứng xác thực reservation từ response của Backend API POST /transfer/:maPhieu/source-confirm
+  // Hợp đồng API trả về: { success: true, data: { saga_id, global_id, ma_kho, event_type: 'TRANSFER_ACCEPTED' } }
+  const [verifiedReservations, setVerifiedReservations] = useState<
+    Record<string, { saga_id: string; global_id: string; ma_kho: string; event_type: string; confirmed_at: number }>
+  >({});
+
   // 1. Tải danh mục Master Data từ Backend
   const fetchMasterData = useCallback(async () => {
     setLoadingMaster(true);
@@ -209,18 +215,47 @@ export default function Transfer() {
     action: 'approve' | 'source-confirm' | 'source-ship' | 'destination-receive',
     actionLabel: string
   ) => {
+    // Guard chống thao tác lặp / gọi đồng thời khi đang có thao tác xử lý
+    if (actionLoadingId) return;
+
     setActionLoadingId(maPhieu);
     setActionStatus({ type: '', text: '' });
 
     try {
-      await api.post(`/transfer/${maPhieu}/${action}`);
+      const res = await api.post(`/transfer/${maPhieu}/${action}`);
+
+      // Xác thực bằng chứng reservation từ response chính thức của API Backend
+      if (action === 'source-confirm') {
+        const resData = res.data?.data;
+        if (resData && resData.event_type === 'TRANSFER_ACCEPTED' && resData.success) {
+          setVerifiedReservations((prev) => ({
+            ...prev,
+            [maPhieu]: {
+              saga_id: resData.saga_id,
+              global_id: resData.global_id,
+              ma_kho: resData.ma_kho,
+              event_type: resData.event_type,
+              confirmed_at: Date.now(),
+            },
+          }));
+        }
+      } else if (action === 'source-ship') {
+        // Sau khi đã xuất chuyển thành công, giải phóng bằng chứng reservation của phiếu
+        setVerifiedReservations((prev) => {
+          const next = { ...prev };
+          delete next[maPhieu];
+          return next;
+        });
+      }
+
       setActionStatus({
         type: 'success',
         text: `Thao tác "${actionLabel}" phiếu ${maPhieu} thành công!`,
       });
-      // Tải lại danh sách
+      // Tải lại danh sách từ nguồn dữ liệu backend
       await fetchTransfers();
     } catch (err: any) {
+      // Nếu thao tác thất bại, hiển thị lỗi và không đánh dấu bước đó là thành công
       setActionStatus({
         type: 'error',
         text: `Thao tác "${actionLabel}" thất bại: ${err.response?.data?.message || err.message}`,
@@ -287,13 +322,31 @@ export default function Transfer() {
 
     const state = item.saga_state;
     switch (state) {
-      case 'WAITING_SOURCE_CONFIRMATION':
+      case 'WAITING_SOURCE_CONFIRMATION': {
+        const isReserved = Boolean(
+          verifiedReservations[item.ma_phieu_dc]?.event_type === 'TRANSFER_ACCEPTED'
+        );
+        if (isReserved) {
+          return (
+            <span
+              className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-teal-100 text-teal-800 border border-teal-200"
+              title={`Saga ID: ${item.saga_id} — Giữ hàng xác thực: TRANSFER_ACCEPTED`}
+            >
+              <CheckCircle2 className="w-3 h-3 text-teal-600" />
+              Đã giữ hàng (Sẵn sàng xuất)
+            </span>
+          );
+        }
         return (
-          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200" title={`Saga ID: ${item.saga_id}`}>
+          <span
+            className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800 border border-purple-200"
+            title={`Saga ID: ${item.saga_id}`}
+          >
             <Clock className="w-3 h-3" />
             Chờ kho xuất giữ hàng
           </span>
         );
+      }
       case 'IN_TRANSIT':
         return (
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-cyan-100 text-cyan-800 border border-cyan-200" title={`Saga ID: ${item.saga_id}`}>
@@ -632,6 +685,11 @@ export default function Transfer() {
                 {transfers.map((item) => {
                   const isOperating = actionLoadingId === item.ma_phieu_dc;
 
+                  // Kiểm tra bằng chứng backend xác thực reservation đã được tạo thành công
+                  const hasReservationEvidence = Boolean(
+                    verifiedReservations[item.ma_phieu_dc]?.event_type === 'TRANSFER_ACCEPTED'
+                  );
+
                   // Điều kiện các nút nghiệp vụ theo Backend:
                   // 1. Duyệt: QUAN_LY_KHO, thuộc kho xuất, trạng thái PENDING/CREATED/CHO_XU_LY
                   const canApprove =
@@ -639,17 +697,21 @@ export default function Transfer() {
                     userKho === item.kho_xuat &&
                     ['PENDING', 'CREATED', 'CHO_XU_LY'].includes(item.trang_thai);
 
-                  // 2. Xác nhận giữ hàng: NHAN_VIEN_KHO, thuộc kho xuất, Saga WAITING_SOURCE_CONFIRMATION
+                  // 2. Xác nhận giữ hàng: NHAN_VIEN_KHO, thuộc kho xuất, Saga WAITING_SOURCE_CONFIRMATION,
+                  // VÀ CHƯA CÓ bằng chứng reservation đã hoàn tất
                   const canConfirmSource =
                     userRole === 'NHAN_VIEN_KHO' &&
                     userKho === item.kho_xuat &&
-                    item.saga_state === 'WAITING_SOURCE_CONFIRMATION';
+                    item.saga_state === 'WAITING_SOURCE_CONFIRMATION' &&
+                    !hasReservationEvidence;
 
-                  // 3. Xuất gửi đi: NHAN_VIEN_KHO, thuộc kho xuất, Saga WAITING_SOURCE_CONFIRMATION
+                  // 3. Xuất gửi đi: NHAN_VIEN_KHO, thuộc kho xuất, Saga WAITING_SOURCE_CONFIRMATION,
+                  // VÀ BẮT BUỘC ĐÃ CÓ bằng chứng backend chứng thực giữ hàng thành công (TRANSFER_ACCEPTED)
                   const canShip =
                     userRole === 'NHAN_VIEN_KHO' &&
                     userKho === item.kho_xuat &&
-                    item.saga_state === 'WAITING_SOURCE_CONFIRMATION';
+                    item.saga_state === 'WAITING_SOURCE_CONFIRMATION' &&
+                    hasReservationEvidence;
 
                   // 4. Nhận hàng: NHAN_VIEN_KHO, thuộc kho nhập đích, Saga IN_TRANSIT
                   const canReceive =

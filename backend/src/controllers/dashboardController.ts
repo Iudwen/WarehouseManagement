@@ -12,20 +12,23 @@ export const getDashboardSummary = async (
 
     const stocks = await getAggregatedStock(maKho);
 
-    const eventsCollection =
-      mongoose.connection.collection('inventory_events');
+    let recentLogs: any[] = [];
+    if (mongoose.connection.readyState === 1) {
+      const eventsCollection =
+        mongoose.connection.collection('inventory_events');
 
-    const query: Record<string, unknown> = {};
+      const query: Record<string, unknown> = {};
 
-    if (maKho && maKho !== 'CENTRAL') {
-      query.ma_kho = maKho.trim().toUpperCase();
+      if (maKho && maKho !== 'CENTRAL') {
+        query.ma_kho = maKho.trim().toUpperCase();
+      }
+
+      recentLogs = await eventsCollection
+        .find(query)
+        .sort({ created_at: -1 })
+        .limit(10)
+        .toArray();
     }
-
-    const recentLogs = await eventsCollection
-      .find(query)
-      .sort({ created_at: -1 })
-      .limit(10)
-      .toArray();
 
     res.json({
       success: true,
