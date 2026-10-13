@@ -187,9 +187,12 @@ export const shipTransfer = async (
     );
   }
 
-  if (saga.current_state !== 'WAITING_SOURCE_CONFIRMATION') {
+  if (
+    saga.current_state !== 'SOURCE_ACCEPTED' &&
+    saga.current_state !== 'WAITING_SOURCE_CONFIRMATION'
+  ) {
     throw new Error(
-      `Saga không ở trạng thái chờ kho nguồn xác nhận: ${saga.current_state}`
+      `Saga chưa được kho nguồn xác nhận giữ hàng: ${saga.current_state}`
     );
   }
 
@@ -318,6 +321,29 @@ export const confirmSourceTransfer = async (
       `Phiếu ${maPhieuDc} chưa có Saga`
     );
   }
+
+  if (
+    saga.kho_xuat.trim().toUpperCase() !==
+    maKhoContext.trim().toUpperCase()
+  ) {
+    throw new Error(
+      'Bạn không thuộc kho xuất của phiếu này'
+    );
+  }
+
+  // Idempotency: Nếu Saga đã ở trạng thái SOURCE_ACCEPTED, trả về kết quả thành công mà không giữ hàng lại
+  if (saga.current_state === 'SOURCE_ACCEPTED') {
+    return {
+      success: true,
+      ma_phieu_dc: saga.ma_phieu_dc,
+      saga_id: saga.saga_id,
+      global_id: saga.ma_giao_dich_global,
+      ma_kho: saga.kho_xuat,
+      event_type: 'TRANSFER_ACCEPTED',
+      already_confirmed: true,
+    };
+  }
+
   if (saga.current_state !== 'WAITING_SOURCE_CONFIRMATION') {
     throw new Error(
       `Saga không ở trạng thái chờ kho nguồn xác nhận: ${saga.current_state}`
@@ -326,6 +352,7 @@ export const confirmSourceTransfer = async (
 
   const sourceNodePool = getDbPool(saga.kho_xuat);
 
+  // 1. Thực hiện giữ hàng nguyên tử trên database Node chi nhánh
   await acceptTransfer(sourceNodePool, {
     saga_id: saga.saga_id,
     global_id: saga.ma_giao_dich_global,
@@ -334,6 +361,30 @@ export const confirmSourceTransfer = async (
     ma_sp: saga.ma_sp,
     so_luong: saga.so_luong_yeu_cau,
   });
+
+  // 2. Lưu trạng thái xác nhận nguồn bền vững vào Central Database
+  await pool.query(
+    `
+    UPDATE saga_transaction
+    SET current_state = 'SOURCE_ACCEPTED',
+        updated_at = CURRENT_TIMESTAMP
+    WHERE saga_id = $1
+      AND current_state = 'WAITING_SOURCE_CONFIRMATION'
+    `,
+    [saga.saga_id]
+  );
+
+  await pool.query(
+    `
+    UPDATE saga_monitoring
+    SET current_state = 'SOURCE_ACCEPTED',
+        last_event_type = 'TRANSFER_ACCEPTED',
+        last_event_at = CURRENT_TIMESTAMP,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE saga_id = $1
+    `,
+    [saga.saga_id]
+  ).catch(() => {});
 
   return {
     success: true,
