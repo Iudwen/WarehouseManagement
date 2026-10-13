@@ -1,0 +1,71 @@
+[
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf3c"
+    },
+    "event_id": "INV001",
+    "event_type": "INVENTORY_UPDATED",
+    "ma_kho": "HN01",
+    "ma_sp": "SP001",
+    "product": {
+      "name": "Laptop Dell",
+      "category": "Điện tử"
+    },
+    "quantity": {
+      "before": 800,
+      "change": 50,
+      "after": 850
+    },
+    "reason": "IMPORT",
+    "event_time": {
+      "$date": "2026-10-12T10:43:34.938Z"
+    },
+    "source": "postgresql_hn"
+  },
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf3d"
+    },
+    "event_id": "INV002",
+    "event_type": "INVENTORY_UPDATED",
+    "ma_kho": "DN01",
+    "ma_sp": "SP001",
+    "product": {
+      "name": "Laptop Dell",
+      "category": "Điện tử"
+    },
+    "quantity": {
+      "before": 200,
+      "change": -20,
+      "after": 180
+    },
+    "reason": "SALE",
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.116Z"
+    },
+    "source": "postgresql_dn"
+  },
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf3e"
+    },
+    "event_id": "INV003",
+    "event_type": "INVENTORY_UPDATED",
+    "ma_kho": "HCM01",
+    "ma_sp": "SP002",
+    "product": {
+      "name": "Chuột Logitech",
+      "category": "Điện tử"
+    },
+    "quantity": {
+      "before": 250,
+      "change": -10,
+      "after": 240
+    },
+    "reason": "SALE",
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.116Z"
+    },
+    "source": "postgresql_hcm"
+  }
+]

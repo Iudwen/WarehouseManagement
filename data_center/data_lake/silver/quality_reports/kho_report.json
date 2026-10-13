@@ -1,0 +1,11 @@
+{
+  "table": "kho",
+  "source_file": "D:\\WarehouseManagement\\data_center\\data_lake\\bronze\\postgresql\\central\\kho.csv",
+  "silver_file": "D:\\WarehouseManagement\\data_center\\data_lake\\silver\\postgresql\\central\\kho.csv",
+  "source_rows": 4,
+  "silver_rows": 4,
+  "rejected_rows": 0,
+  "duplicate_rows_detected": 0,
+  "invalid_rows": 0,
+  "processed_at": "2026-10-13T17:09:25.731744"
+}

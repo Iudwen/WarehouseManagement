@@ -1,0 +1,10 @@
+[
+  {
+    "_id": "warehouse_system",
+    "created_at": {
+      "$date": "2026-09-17T22:10:37Z"
+    },
+    "description": "Lưu trữ dữ liệu sự kiện và log từ hệ thống kho",
+    "system_name": "Warehouse Management System"
+  }
+]

@@ -2,8 +2,8 @@ FROM python:3.14-slim
 
 WORKDIR /app
 
-RUN pip install --no-cache-dir "psycopg[binary]"
+RUN pip install --no-cache-dir "psycopg[binary]" "pymongo"
 
-COPY sync_service.py .
+COPY . .
 
 CMD ["python", "-u", "sync_service.py"]

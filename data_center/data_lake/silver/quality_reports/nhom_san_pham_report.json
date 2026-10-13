@@ -1,0 +1,11 @@
+{
+  "table": "nhom_san_pham",
+  "source_file": "D:\\WarehouseManagement\\data_center\\data_lake\\bronze\\postgresql\\central\\nhom_san_pham.csv",
+  "silver_file": "D:\\WarehouseManagement\\data_center\\data_lake\\silver\\postgresql\\central\\nhom_san_pham.csv",
+  "source_rows": 3,
+  "silver_rows": 3,
+  "rejected_rows": 0,
+  "duplicate_rows_detected": 0,
+  "invalid_rows": 0,
+  "processed_at": "2026-10-13T17:09:25.734709"
+}

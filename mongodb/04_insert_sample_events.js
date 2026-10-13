@@ -138,7 +138,7 @@ db.inventory_events.insertMany([
             after: 180
         },
 
-        reason: "SALE",
+        reason: "OUTBOUND",
 
         event_time: new Date(),
 
@@ -165,7 +165,7 @@ db.inventory_events.insertMany([
             after: 240
         },
 
-        reason: "SALE",
+        reason: "OUTBOUND",
 
         event_time: new Date(),
 
@@ -176,15 +176,15 @@ db.inventory_events.insertMany([
 
 
 // =========================================================
-// 3. SALES EVENTS
+// 3. OUTBOUND EVENTS
 // =========================================================
 
-db.sales_events.insertMany([
+db.outbound_events.insertMany([
 
     {
-        event_id: "SALE001",
+        event_id: "OUT001",
 
-        event_type: "SALE_COMPLETED",
+        event_type: "OUTBOUND_COMPLETED",
 
         ma_kho: "HN01",
 
@@ -224,9 +224,9 @@ db.sales_events.insertMany([
 
 
     {
-        event_id: "SALE002",
+        event_id: "OUT002",
 
-        event_type: "SALE_COMPLETED",
+        event_type: "OUTBOUND_COMPLETED",
 
         ma_kho: "HCM01",
 
@@ -402,3 +402,4 @@ print("Sample events inserted successfully.");
 print("==========================================");
 print("MONGODB INITIALIZATION COMPLETED");
 print("==========================================");
+```

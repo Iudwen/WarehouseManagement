@@ -1,0 +1,44 @@
+[
+  {
+    "event_id": "INV001",
+    "loai_su_kien": "INVENTORY_UPDATED",
+    "ma_kho": "HN01",
+    "ma_sp": "SP001",
+    "ten_sp": "Laptop Dell",
+    "danh_muc": "Điện tử",
+    "so_luong_truoc": 800,
+    "so_luong_thay_doi": 50,
+    "so_luong_sau": 850,
+    "ly_do": "IMPORT",
+    "thoi_gian_su_kien": "2026-10-12T10:43:34.938Z",
+    "nguon_du_lieu": "postgresql_hn"
+  },
+  {
+    "event_id": "INV002",
+    "loai_su_kien": "INVENTORY_UPDATED",
+    "ma_kho": "DN01",
+    "ma_sp": "SP001",
+    "ten_sp": "Laptop Dell",
+    "danh_muc": "Điện tử",
+    "so_luong_truoc": 200,
+    "so_luong_thay_doi": -20,
+    "so_luong_sau": 180,
+    "ly_do": "SALE",
+    "thoi_gian_su_kien": "2026-09-17T22:10:39.116Z",
+    "nguon_du_lieu": "postgresql_dn"
+  },
+  {
+    "event_id": "INV003",
+    "loai_su_kien": "INVENTORY_UPDATED",
+    "ma_kho": "HCM01",
+    "ma_sp": "SP002",
+    "ten_sp": "Chuột Logitech",
+    "danh_muc": "Điện tử",
+    "so_luong_truoc": 250,
+    "so_luong_thay_doi": -10,
+    "so_luong_sau": 240,
+    "ly_do": "SALE",
+    "thoi_gian_su_kien": "2026-09-17T22:10:39.116Z",
+    "nguon_du_lieu": "postgresql_hcm"
+  }
+]

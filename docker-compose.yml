@@ -241,10 +241,21 @@ services:
       dockerfile: Dockerfile
 
     container_name: warehouse_sync_service
-
     restart: unless-stopped
 
+    environment:
+      MONGO_URI: ${MONGO_URI}
+      MONGO_DATABASE: ${MONGO_DATABASE:-warehouse_events}
+
+      POSTGRES_HOST: postgres_central
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB_CENTRAL}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+
     depends_on:
+      mongodb:
+        condition: service_healthy
       postgres_hn:
         condition: service_healthy
       postgres_dn:
@@ -253,6 +264,9 @@ services:
         condition: service_healthy
       postgres_central:
         condition: service_healthy
+
+    volumes:
+      - ./data_center/data_lake:/app/data_lake
 
     networks:
       - warehouse_network

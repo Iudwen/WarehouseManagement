@@ -1,0 +1,68 @@
+[
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf3f"
+    },
+    "event_id": "SALE001",
+    "event_type": "SALE_COMPLETED",
+    "ma_kho": "HN01",
+    "ma_phieu_xuat": "PXHN0001",
+    "customer": {
+      "ma_kh": "KH0001",
+      "type": "NORMAL"
+    },
+    "items": [
+      {
+        "ma_sp": "SP001",
+        "name": "Laptop Dell",
+        "quantity": 2,
+        "price": 18000000
+      },
+      {
+        "ma_sp": "SP002",
+        "name": "Chuột Logitech",
+        "quantity": 3,
+        "price": 450000
+      }
+    ],
+    "payment": {
+      "method": "CASH",
+      "status": "PAID"
+    },
+    "total_amount": 37350000,
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.117Z"
+    },
+    "source": "warehouse_management_system"
+  },
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf40"
+    },
+    "event_id": "SALE002",
+    "event_type": "SALE_COMPLETED",
+    "ma_kho": "HCM01",
+    "ma_phieu_xuat": "PXHCM0001",
+    "customer": {
+      "ma_kh": "KH0002",
+      "type": "ONLINE"
+    },
+    "items": [
+      {
+        "ma_sp": "SP002",
+        "name": "Chuột Logitech",
+        "quantity": 5,
+        "price": 450000
+      }
+    ],
+    "payment": {
+      "method": "BANKING",
+      "status": "PAID"
+    },
+    "total_amount": 2250000,
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.117Z"
+    },
+    "source": "warehouse_management_system"
+  }
+]

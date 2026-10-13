@@ -1,0 +1,54 @@
+[
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf43"
+    },
+    "log_id": "LOG001",
+    "level": "INFO",
+    "service": "inventory_service",
+    "message": "Inventory updated successfully",
+    "ma_kho": "HN01",
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.120Z"
+    },
+    "metadata": {
+      "user": "admin_hn",
+      "operation": "UPDATE_INVENTORY"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf44"
+    },
+    "log_id": "LOG002",
+    "level": "INFO",
+    "service": "transfer_service",
+    "message": "Transfer completed",
+    "ma_kho": "HN01",
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.120Z"
+    },
+    "metadata": {
+      "ma_phieu_dc": "DC0001",
+      "destination": "DN01"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf45"
+    },
+    "log_id": "LOG003",
+    "level": "WARNING",
+    "service": "inventory_service",
+    "message": "Inventory below safety stock",
+    "ma_kho": "DN01",
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.120Z"
+    },
+    "metadata": {
+      "ma_sp": "SP001",
+      "current_quantity": 80,
+      "safety_stock": 200
+    }
+  }
+]
