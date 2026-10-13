@@ -33,7 +33,7 @@ app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 // Kết nối Mongo Event Log
 const mongoUri =
   process.env.MONGO_URI ||
-  'mongodb://127.0.0.1:63606/warehouse_events';
+  'mongodb://127.0.0.1:27018/warehouse_events';
 mongoose.connect(mongoUri)
   .then(() => console.log('🍃 MongoDB Event Logs Connected!'))
   .catch((err) => console.error('❌ Lỗi kết nối MongoDB:', err));

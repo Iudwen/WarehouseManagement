@@ -1,6 +1,10 @@
 import { Pool } from 'pg';
+import { pools } from '../config/postgresql';
 
 export const getMasterData = async (pool: Pool) => {
+  // nha_cung_cap và khach_hang thuộc schema chi nhánh (có trên HN, DN, HCM; không có trên Central)
+  const partnerPool = pool === pools.CENTRAL ? pools.HN : pool;
+
   const [sanPhamRes, nccRes, khRes, khoRes] = await Promise.all([
     pool.query(`
       SELECT
@@ -13,14 +17,14 @@ export const getMasterData = async (pool: Pool) => {
       WHERE trang_thai = 'ACTIVE'
     `),
 
-    pool.query(`
+    partnerPool.query(`
       SELECT
         ma_ncc,
         ten_ncc
       FROM nha_cung_cap
     `),
 
-    pool.query(`
+    partnerPool.query(`
       SELECT
         ma_kh,
         ten_kh
