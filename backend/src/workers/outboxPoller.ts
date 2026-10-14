@@ -13,6 +13,8 @@ export interface ClaimOptions {
   whitelistEventIds?: string[];
   requireWhitelist?: boolean;
   allowedEventTypes?: string[];
+  /** @deprecated Đã loại bỏ khỏi luồng chọn sự kiện chuẩn sau khi hoàn tất quarantine dữ liệu cũ */
+  createdAfter?: Date;
 }
 
 /**
@@ -23,7 +25,7 @@ export async function claimEvents(
   pool: Pool,
   options: ClaimOptions = {}
 ): Promise<OutboxEvent[]> {
-  const requireWhitelist = options.requireWhitelist !== false;
+  const requireWhitelist = options.requireWhitelist === true;
   const whitelist = options.whitelistEventIds;
   const allowedTypes = options.allowedEventTypes || ['TRANSFER_SHIPPED', 'TRANSFER_RECEIVED'];
 
@@ -138,6 +140,8 @@ export interface ReapOptions {
   limit?: number;
   whitelistEventIds?: string[];
   requireWhitelist?: boolean;
+  /** @deprecated Đã loại bỏ khỏi luồng chọn sự kiện chuẩn sau khi hoàn tất quarantine dữ liệu cũ */
+  createdAfter?: Date;
 }
 
 export interface ReapResult {
@@ -154,7 +158,7 @@ export async function reapExpiredLeases(
   pool: Pool,
   options: ReapOptions = {}
 ): Promise<ReapResult> {
-  const requireWhitelist = options.requireWhitelist !== false;
+  const requireWhitelist = options.requireWhitelist === true;
   const whitelist = options.whitelistEventIds;
   const leaseTimeoutSeconds = options.leaseTimeoutSeconds && options.leaseTimeoutSeconds > 0
     ? options.leaseTimeoutSeconds

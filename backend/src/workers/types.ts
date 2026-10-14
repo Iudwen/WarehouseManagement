@@ -99,7 +99,10 @@ export interface WorkerConfig {
   once: boolean;
   whitelistEventIds?: string[];
   requireWhitelist?: boolean;
+  /** @deprecated Không còn cần thiết khi các sự kiện cũ đã được cách ly qua quarantine (next_retry_at = 2099) */
   allowUnsafeAllPending?: boolean;
+  /** @deprecated Bộ lọc createdAfter đã được loại bỏ khỏi luồng chọn sự kiện chuẩn sau khi cách ly dữ liệu cũ (Quarantine) */
+  createdAfter?: Date;
   leaseTimeoutSeconds?: number;
   maxShutdownWaitMs?: number;
 }

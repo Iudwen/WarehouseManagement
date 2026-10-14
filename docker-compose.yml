@@ -258,6 +258,50 @@ services:
       - warehouse_network
 
 
+  # ==========================================================
+  # OUTBOX RELAY WORKER
+  # ==========================================================
+  outbox_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+
+    container_name: warehouse_outbox_worker
+
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+      POSTGRES_HOST_HN: postgres_hn
+      POSTGRES_PORT_HN: 5432
+      POSTGRES_DB_HN: ${POSTGRES_DB_HN}
+      POSTGRES_HOST_DN: postgres_dn
+      POSTGRES_PORT_DN: 5432
+      POSTGRES_DB_DN: ${POSTGRES_DB_DN}
+      POSTGRES_HOST_HCM: postgres_hcm
+      POSTGRES_PORT_HCM: 5432
+      POSTGRES_DB_HCM: ${POSTGRES_DB_HCM}
+      POSTGRES_HOST_CENTRAL: postgres_central
+      POSTGRES_PORT_CENTRAL: 5432
+      POSTGRES_DB_CENTRAL: ${POSTGRES_DB_CENTRAL}
+      OUTBOX_ALL_NODES: "true"
+      OUTBOX_POLL_INTERVAL: "3000"
+
+    depends_on:
+      postgres_hn:
+        condition: service_healthy
+      postgres_dn:
+        condition: service_healthy
+      postgres_hcm:
+        condition: service_healthy
+      postgres_central:
+        condition: service_healthy
+
+    networks:
+      - warehouse_network
+
+
 # ==========================================================
 # VOLUMES
 # ==========================================================
