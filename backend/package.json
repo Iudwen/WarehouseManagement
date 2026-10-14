@@ -5,8 +5,13 @@
   "scripts": {
     "build": "tsc && node scripts/copy-assets.js",
     "start": "node dist/app.js",
-    "dev": "ts-node-dev --respawn --transpile-only --exit-child src/app.ts",
-    "worker": "ts-node src/workers/outboxWorker.ts"
+    "worker": "ts-node src/workers/outboxWorker.ts",
+    "worker:all": "ts-node src/workers/outboxWorker.ts --all-nodes",
+    "worker:once": "ts-node src/workers/outboxWorker.ts --once",
+    "test": "node tests/test_unit_source_confirm.js && node tests/test_relay_without_created_after.js && node tests/test_outbox_pipeline_verification.js",
+    "test:relay": "node tests/test_relay_without_created_after.js",
+    "test:pipeline": "node tests/test_outbox_pipeline_verification.js",
+    "test:unit": "node tests/test_unit_source_confirm.js"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",

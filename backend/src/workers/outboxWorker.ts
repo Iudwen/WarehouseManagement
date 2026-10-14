@@ -43,26 +43,29 @@ export class OutboxWorker {
     const leaseTimeoutSeconds = config.leaseTimeoutSeconds && config.leaseTimeoutSeconds > 0 ? config.leaseTimeoutSeconds : 300;
 
     // =========================================================================
-    // KHÓA AN TOÀN FAIL-CLOSED: MẶC ĐỊNH BẮT BUỘC WHITELIST
+    // CƠ CHẾ AN TOÀN VÀ PHÂN ĐỊNH CHẾ ĐỘ QUÉT OUTBOX
     // =========================================================================
-    // 1. requireWhitelist mặc định là TRUE (Fail-Closed) trừ khi được chỉ định rõ
-    const requireWhitelist = config.requireWhitelist !== undefined ? config.requireWhitelist : true;
-    const whitelistEventIds = config.whitelistEventIds;
+    let requireWhitelist = config.requireWhitelist;
+    let whitelistEventIds = config.whitelistEventIds;
+    let allowUnsafeAllPending = config.allowUnsafeAllPending || false;
 
-    // 2. Chế độ an toàn bắt buộc Whitelist: Nếu bật requireWhitelist mà danh sách rỗng hoặc thiếu -> Từ chối khởi tạo ngay lập tức
-    if (requireWhitelist) {
-      if (!whitelistEventIds || !Array.isArray(whitelistEventIds) || whitelistEventIds.length === 0) {
-        throw new Error(
-          `[FAIL-CLOSED SAFETY LOCK] Worker từ chối khởi tạo: Bắt buộc cung cấp whitelistEventIds hợp lệ khi requireWhitelist=true. Không được phép quét toàn bộ bảng khi chưa có cấu hình an toàn.`
-        );
-      }
+    if (whitelistEventIds && Array.isArray(whitelistEventIds) && whitelistEventIds.length > 0) {
+      // 1. Chế độ Whitelist (Chỉ quét các ID chỉ định - dùng cho Test Fixture / Audit)
+      requireWhitelist = true;
+    } else if (requireWhitelist === true) {
+      // Nếu bật requireWhitelist tường minh mà không có ID -> Từ chối khởi tạo
+      throw new Error(
+        `[FAIL-CLOSED SAFETY LOCK] Worker từ chối khởi tạo: Bắt buộc cung cấp whitelistEventIds hợp lệ khi requireWhitelist=true.`
+      );
     } else {
-      // 3. Nếu tắt whitelist (chế độ quét tự do), bắt buộc có cờ xác nhận tường minh allowUnsafeAllPending=true
-      if (!config.allowUnsafeAllPending) {
-        throw new Error(
-          `[FAIL-CLOSED SAFETY LOCK] Worker từ chối khởi tạo ở chế độ quét tự do (requireWhitelist=false) khi chưa có cờ xác nhận tường minh allowUnsafeAllPending=true. Hành vi quét toàn bộ bảng bị chặn để bảo vệ legacy events.`
-        );
-      }
+      // 2. Chế độ Tiêu Chuẩn (Standard Production Relay):
+      // Quét tất cả các sự kiện PENDING có next_retry_at <= CURRENT_TIMESTAMP.
+      // Dữ liệu cũ chưa xác minh trên các node (25 bản ghi HN, 1 bản ghi DN) đã được cách ly qua cơ chế Quarantine
+      // với next_retry_at = '2099-01-01 00:00:00' và lưu trong bảng backup outbox_quarantine_backup_20261014.
+      // Node HCM hiện tại có 0 sự kiện trong outbox_event.
+      // Đã loại bỏ hoàn toàn bộ lọc createdAfter mặc định để bảo đảm các sự kiện hợp lệ sinh ra trong thời gian
+      // worker tạm dừng hoặc downtime không bị bỏ sót ngoài ý muốn.
+      requireWhitelist = false;
     }
 
     this.config = {
@@ -72,8 +75,9 @@ export class OutboxWorker {
       dryRun: config.dryRun || false,
       once: config.once || false,
       whitelistEventIds,
-      requireWhitelist,
-      allowUnsafeAllPending: config.allowUnsafeAllPending || false,
+      requireWhitelist: Boolean(requireWhitelist),
+      allowUnsafeAllPending,
+      createdAfter: undefined,
       leaseTimeoutSeconds,
       maxShutdownWaitMs: config.maxShutdownWaitMs || 5000,
     };
@@ -112,7 +116,11 @@ export class OutboxWorker {
     console.log(`  -> Batch Size: ${this.config.batchSize}`);
     console.log(`  -> Poll Interval: ${this.config.pollIntervalMs}ms`);
     console.log(`  -> Mode: ${this.config.once ? 'Single-pass (--once)' : 'Continuous'}`);
-    console.log(`  -> Whitelist Mode: ${this.config.requireWhitelist ? 'ENABLED (Test Fixture Protected)' : 'ALL PENDING'}`);
+    if (this.config.requireWhitelist) {
+      console.log(`  -> Filter Mode: WHITELIST (${this.config.whitelistEventIds?.length || 0} events)`);
+    } else {
+      console.log(`  -> Filter Mode: STANDARD ACTIONABLE PENDING (Quarantine-Protected, createdAfter filter removed)`);
+    }
     console.log('====================================================');
 
     if (this.config.once) {
@@ -359,7 +367,6 @@ if (require.main === module) {
   const isHelp = args.includes('--help') || args.includes('-h');
   const isOnce = args.includes('--once');
   const isDryRun = args.includes('--dry-run');
-  const isAllNodes = args.includes('--all-nodes');
 
   // Trích xuất tham số dạng --key=value hoặc --key value
   const getArgValue = (flag: string): string | undefined => {
@@ -372,11 +379,24 @@ if (require.main === module) {
   };
 
   const nodeArg = getArgValue('node') || process.env.NODE_NAME || 'HN';
-  const batchSizeArg = getArgValue('batch-size') ? Number(getArgValue('batch-size')) : undefined;
-  const pollIntervalArg = getArgValue('poll-interval') ? Number(getArgValue('poll-interval')) : undefined;
-  const leaseTimeoutArg = getArgValue('lease-timeout') ? Number(getArgValue('lease-timeout')) : undefined;
-  const whitelistArg = getArgValue('whitelist');
-  const allowUnsafeArg = args.includes('--allow-unsafe-all-pending');
+  const batchSizeArg = getArgValue('batch-size')
+    ? Number(getArgValue('batch-size'))
+    : process.env.OUTBOX_BATCH_SIZE
+    ? Number(process.env.OUTBOX_BATCH_SIZE)
+    : undefined;
+  const pollIntervalArg = getArgValue('poll-interval')
+    ? Number(getArgValue('poll-interval'))
+    : process.env.OUTBOX_POLL_INTERVAL
+    ? Number(process.env.OUTBOX_POLL_INTERVAL)
+    : undefined;
+  const leaseTimeoutArg = getArgValue('lease-timeout')
+    ? Number(getArgValue('lease-timeout'))
+    : process.env.OUTBOX_LEASE_TIMEOUT
+    ? Number(process.env.OUTBOX_LEASE_TIMEOUT)
+    : undefined;
+  const whitelistArg = getArgValue('whitelist') || process.env.OUTBOX_WHITELIST;
+  const allowUnsafeArg = args.includes('--allow-unsafe-all-pending') || process.env.ALLOW_UNSAFE_ALL_PENDING === 'true';
+  const isAllNodes = args.includes('--all-nodes') || process.env.OUTBOX_ALL_NODES === 'true';
 
   const whitelistEventIds = whitelistArg
     ? whitelistArg.split(',').map((id) => id.trim()).filter((id) => id.length > 0)
@@ -389,14 +409,16 @@ Sử dụng: npx ts-node src/workers/outboxWorker.ts [options]
 Tùy chọn:
   --node=<name>                  Tên Node mục tiêu (HN, DN, HCM). Mặc định: HN hoặc từ biến môi trường NODE_NAME
   --all-nodes                    Khởi chạy đồng thời Worker cho toàn bộ các Node (HN, DN, HCM)
-  --whitelist=<uuid1,uuid2,...>  Danh sách event UUID cho phép claim (Fail-Closed mặc định bắt buộc)
-  --allow-unsafe-all-pending     Cờ xác nhận tường minh cho phép quét toàn bộ bảng khi không dùng whitelist
+  --whitelist=<uuid1,uuid2,...>  Danh sách event UUID cho phép claim (Chế độ Test Fixture / Kiểm thử cô lập)
   --batch-size=<n>               Số lượng event tối đa claim trong mỗi đợt (mặc định: 10)
   --poll-interval=<ms>           Thời gian chờ giữa các chu kỳ polling (mặc định: 3000ms)
   --lease-timeout=<s>            Thời gian hết hạn lease tính bằng giây (mặc định: 300s)
   --once                         Chạy kiểm tra một chu kỳ rồi thoát an toàn
   --dry-run                      Chế độ mô phỏng, không ghi dữ liệu lên Central
   --help, -h                     Hiển thị thông tin trợ giúp
+
+Lưu ý: Mặc định Worker hoạt động ở chế độ Chuẩn (Standard Relay) bảo vệ bởi Quarantine:
+       Quét tất cả các sự kiện PENDING có next_retry_at <= CURRENT_TIMESTAMP mà không cần createdAfter.
     `);
     process.exit(0);
   }
@@ -408,7 +430,7 @@ Tùy chọn:
     pollIntervalMs: pollIntervalArg,
     leaseTimeoutSeconds: leaseTimeoutArg,
     whitelistEventIds,
-    requireWhitelist: !allowUnsafeArg,
+    requireWhitelist: Boolean(whitelistEventIds && whitelistEventIds.length > 0),
     allowUnsafeAllPending: allowUnsafeArg,
   };
 
@@ -424,7 +446,9 @@ Tùy chọn:
     process.on('SIGINT', () => handleShutdown('SIGINT'));
     process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 
-    multiWorker.start().catch((err) => {
+    multiWorker.start().then(() => {
+      if (isOnce) process.exit(0);
+    }).catch((err) => {
       console.error('[MULTI-NODE WORKER FATAL]:', err);
       process.exit(1);
     });
@@ -443,7 +467,9 @@ Tùy chọn:
     process.on('SIGINT', () => handleShutdown('SIGINT'));
     process.on('SIGTERM', () => handleShutdown('SIGTERM'));
 
-    worker.start().catch((err) => {
+    worker.start().then(() => {
+      if (isOnce) process.exit(0);
+    }).catch((err) => {
       console.error('[OUTBOX WORKER FATAL]:', err);
       process.exit(1);
     });
