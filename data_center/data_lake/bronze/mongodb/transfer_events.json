@@ -1,0 +1,51 @@
+[
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf41"
+    },
+    "event_id": "TRF001",
+    "event_type": "TRANSFER_CREATED",
+    "ma_phieu_dc": "DC0001",
+    "kho_xuat": "HN01",
+    "kho_nhap": "DN01",
+    "items": [
+      {
+        "ma_sp": "SP001",
+        "name": "Laptop Dell",
+        "quantity": 50
+      },
+      {
+        "ma_sp": "SP002",
+        "name": "Chuột Logitech",
+        "quantity": 100
+      }
+    ],
+    "status": "COMPLETED",
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.119Z"
+    },
+    "source": "warehouse_management_system"
+  },
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf42"
+    },
+    "event_id": "TRF002",
+    "event_type": "TRANSFER_CREATED",
+    "ma_phieu_dc": "DC0002",
+    "kho_xuat": "HCM01",
+    "kho_nhap": "DN01",
+    "items": [
+      {
+        "ma_sp": "SP003",
+        "name": "Bàn phím Logitech",
+        "quantity": 80
+      }
+    ],
+    "status": "PENDING",
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.119Z"
+    },
+    "source": "warehouse_management_system"
+  }
+]

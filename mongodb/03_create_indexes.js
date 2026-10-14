@@ -1,3 +1,4 @@
+
 // =========================================================
 // MONGODB - CREATE INDEXES
 // =========================================================
@@ -48,22 +49,22 @@ db.inventory_events.createIndex(
 
 
 // =========================================================
-// SALES EVENTS
+// OUTBOUND EVENTS
 // =========================================================
 
-db.sales_events.createIndex(
+db.outbound_events.createIndex(
     { event_time: -1 }
 );
 
-db.sales_events.createIndex(
+db.outbound_events.createIndex(
     { ma_kho: 1 }
 );
 
-db.sales_events.createIndex(
+db.outbound_events.createIndex(
     { ma_sp: 1 }
 );
 
-db.sales_events.createIndex(
+db.outbound_events.createIndex(
     { ma_kho: 1, ma_sp: 1 }
 );
 
@@ -107,3 +108,4 @@ db.system_logs.createIndex(
 
 
 print("Indexes created successfully.");
+```

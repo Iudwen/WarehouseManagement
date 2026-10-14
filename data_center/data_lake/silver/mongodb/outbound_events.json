@@ -1,0 +1,42 @@
+[
+  {
+    "event_id": "SALE001",
+    "loai_su_kien_nguon": "SALE_COMPLETED",
+    "loai_su_kien": "OUTBOUND_COMPLETED",
+    "ma_kho": "HN01",
+    "ma_phieu_xuat": "PXHN0001",
+    "thoi_gian_xuat": "2026-09-17T22:10:39.117Z",
+    "items": [
+      {
+        "ma_sp": "SP001",
+        "ten_sp": "Laptop Dell",
+        "so_luong": 2,
+        "don_gia_tham_khao": 18000000
+      },
+      {
+        "ma_sp": "SP002",
+        "ten_sp": "Chuột Logitech",
+        "so_luong": 3,
+        "don_gia_tham_khao": 450000
+      }
+    ],
+    "nguon_du_lieu": "warehouse_management_system"
+  },
+  {
+    "event_id": "SALE002",
+    "loai_su_kien_nguon": "SALE_COMPLETED",
+    "loai_su_kien": "OUTBOUND_COMPLETED",
+    "ma_kho": "HCM01",
+    "ma_phieu_xuat": "PXHCM0001",
+    "thoi_gian_xuat": "2026-09-17T22:10:39.117Z",
+    "items": [
+      {
+        "ma_sp": "SP002",
+        "ten_sp": "Chuột Logitech",
+        "so_luong": 5,
+        "don_gia_tham_khao": 450000
+      }
+    ],
+    "nguon_du_lieu": "warehouse_management_system"
+  }
+]

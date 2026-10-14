@@ -1,0 +1,63 @@
+[
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf39"
+    },
+    "event_id": "EVT001",
+    "event_type": "WAREHOUSE_OPEN",
+    "ma_kho": "HN01",
+    "warehouse": {
+      "name": "Kho Hà Nội",
+      "city": "Hà Nội"
+    },
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.111Z"
+    },
+    "source": "warehouse_management_system",
+    "metadata": {
+      "user": "admin_hn",
+      "device": "WEB",
+      "ip": "192.168.1.10"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf3a"
+    },
+    "event_id": "EVT002",
+    "event_type": "WAREHOUSE_OPEN",
+    "ma_kho": "DN01",
+    "warehouse": {
+      "name": "Kho Đà Nẵng",
+      "city": "Đà Nẵng"
+    },
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.111Z"
+    },
+    "source": "warehouse_management_system",
+    "metadata": {
+      "user": "admin_dn",
+      "device": "WEB"
+    }
+  },
+  {
+    "_id": {
+      "$oid": "6aac655ffb8bf3cc416bbf3b"
+    },
+    "event_id": "EVT003",
+    "event_type": "WAREHOUSE_OPEN",
+    "ma_kho": "HCM01",
+    "warehouse": {
+      "name": "Kho Hồ Chí Minh",
+      "city": "Hồ Chí Minh"
+    },
+    "event_time": {
+      "$date": "2026-09-17T22:10:39.111Z"
+    },
+    "source": "warehouse_management_system",
+    "metadata": {
+      "user": "admin_hcm",
+      "device": "WEB"
+    }
+  }
+]

@@ -1,0 +1,3 @@
+﻿id,ma_phieu_dc,kho_xuat,kho_nhap,ma_sp,so_luong,ngay_dieu_chuyen,trang_thai,source_node,created_at
+1,DC_TEST_001,HN01,DN01,SP001,20,2026-09-18 18:51:24.225544,HOAN_THANH,NODE_HN,2026-09-18 18:51:24.225544
+2,DC_TEST_002,HN01,DN01,SP001,20,2026-09-25 07:49:22.378965,CHENH_LECH,NODE_HN,2026-09-25 07:49:22.378965
