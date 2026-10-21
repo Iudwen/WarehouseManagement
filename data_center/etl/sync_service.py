@@ -98,6 +98,24 @@ def ensure_central_schema(central_conn):
         ma_sp,
         source_node
     );
+
+    CREATE TABLE IF NOT EXISTS lich_su_ton_kho_central (
+        id BIGSERIAL PRIMARY KEY,
+        ma_kho VARCHAR(10) NOT NULL,
+        ma_sp VARCHAR(20) NOT NULL,
+        ngay DATE NOT NULL,
+        ton_dau INT DEFAULT 0,
+        nhap INT DEFAULT 0,
+        xuat INT DEFAULT 0,
+        dieu_chuyen_vao INT DEFAULT 0,
+        dieu_chuyen_ra INT DEFAULT 0,
+        ton_cuoi INT DEFAULT 0,
+        source_node VARCHAR(50),
+        created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS uq_lich_su_ton_kho_central_kho_sp_ngay
+    ON lich_su_ton_kho_central (ma_kho, ma_sp, ngay);
     """
 
     with central_conn.cursor() as cursor:
@@ -603,6 +621,93 @@ def sync_inventory(
 
 
 # ============================================================
+# 11.5. GHI LỊCH SỬ ẢNH CHỤP TỒN KHO HẰNG NGÀY
+# ============================================================
+
+def sync_inventory_history(
+    central_conn,
+    inventory,
+    node_config
+):
+    """Ghi ảnh chụp tồn kho theo ngày, không dựng lại lịch sử quá khứ.
+
+    Lần ghi đầu tiên trong ngày lấy tồn hiện tại làm mốc nếu chưa có ngày
+    trước đó. Nếu đã có lịch sử trước đó thì dùng tồn cuối gần nhất làm tồn
+    đầu. Các lần sync tiếp theo trong cùng ngày chỉ cập nhật tồn cuối.
+
+    Các cột nhập/xuất/điều chuyển giữ 0 ở phiên bản này vì cần quy tắc nghiệp
+    vụ riêng để tránh tính trùng hoặc ghi sai các phiếu điều chuyển Saga.
+    """
+    history_sql = """
+        INSERT INTO lich_su_ton_kho_central (
+            ma_kho,
+            ma_sp,
+            ngay,
+            ton_dau,
+            nhap,
+            xuat,
+            dieu_chuyen_vao,
+            dieu_chuyen_ra,
+            ton_cuoi,
+            source_node
+        )
+        VALUES (
+            %s, %s, CURRENT_DATE, %s, 0, 0, 0, 0, %s, %s
+        )
+        ON CONFLICT (ma_kho, ma_sp, ngay)
+        DO UPDATE SET
+            ton_cuoi = EXCLUDED.ton_cuoi,
+            source_node = EXCLUDED.source_node
+    """
+
+    previous_sql = """
+        SELECT ton_cuoi
+        FROM lich_su_ton_kho_central
+        WHERE ma_kho = %s
+          AND ma_sp = %s
+          AND ngay < CURRENT_DATE
+        ORDER BY ngay DESC
+        LIMIT 1
+    """
+
+    try:
+        with central_conn.cursor() as cursor:
+            for item in inventory:
+                ma_kho, ma_sp, so_luong, _cap_nhat_luc = item
+
+                cursor.execute(
+                    previous_sql,
+                    (ma_kho, ma_sp)
+                )
+                previous_row = cursor.fetchone()
+                ton_dau = (
+                    previous_row[0]
+                    if previous_row is not None
+                    else so_luong
+                )
+
+                cursor.execute(
+                    history_sql,
+                    (
+                        ma_kho,
+                        ma_sp,
+                        ton_dau,
+                        so_luong,
+                        node_config["node_name"]
+                    )
+                )
+
+        central_conn.commit()
+        print(
+            f"[SYNC] Lịch sử ảnh chụp tồn kho: {len(inventory)} bản ghi"
+        )
+
+    except Exception:
+        central_conn.rollback()
+        raise
+
+
+# ============================================================
 # 12. ĐỒNG BỘ NHẬP HÀNG
 # ============================================================
 
@@ -1044,6 +1149,12 @@ def sync_node(
 
         print(
             "[SYNC] Bảng tồn kho: OK"
+        )
+
+        sync_inventory_history(
+            central_conn,
+            inventory,
+            node_config
         )
 
         sync_purchase_receipts(

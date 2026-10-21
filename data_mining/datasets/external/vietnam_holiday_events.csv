@@ -1,0 +1,75 @@
+﻿date,event_name,record_type,is_public_holiday,is_day_off,is_compensatory,is_makeup_workday,applicability,source,source_url,verification_status,notes
+2026-01-01,International New Year's Day,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-01-02,New Year's Day Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-01-10,Working day for New Year Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-02-14,Valentine's Day,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-02-16,Vietnamese New Year's Eve,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-02-17,Vietnamese New Year,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-02-18,Tet Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-02-19,Tet Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-02-20,Tet Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-02-21,Tet Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-03-20,March Equinox,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-04-05,Easter Sunday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-04-26,Hung Kings Festival,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-04-27,Day off for Hung Kings Festival,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-04-30,Liberation Day/Reunification Day,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-05-01,International Labor Day,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-06-21,June Solstice,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-06-28,Vietnamese Family Day,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-08-22,Working day for Independence Day Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-08-31,Independence Day Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-09-01,Independence Day Holiday,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-09-02,Independence Day,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-09-23,September Equinox,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-10-20,Vietnamese Women's Day,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-10-31,Halloween,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-11-24,Vietnam Culture Day (Tentative Date),API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-12-22,December Solstice,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-12-24,Christmas Eve,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-12-25,Christmas Day,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2026-12-31,International New Year's Eve,API_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,API_NINJAS_V2,https://api-ninjas.com/api/holidays,API_UNVERIFIED,Can doi chieu lich nghi chinh thuc.
+2023-01-01,Tết Dương lịch,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-01-20,Kỳ nghỉ Tết Nguyên đán,MANUAL_HOLIDAY,0,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-01-21,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-01-22,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-01-23,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-01-24,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-01-25,Kỳ nghỉ Tết Nguyên đán,MANUAL_HOLIDAY,0,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-04-29,Giỗ Tổ Hùng Vương,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-04-30,Ngày Giải phóng miền Nam,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-05-01,Quốc tế Lao động,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2023-09-02,Quốc khánh,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-01-01,Tết Dương lịch,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-02-08,Kỳ nghỉ Tết Nguyên đán,MANUAL_HOLIDAY,0,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-02-09,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-02-10,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-02-11,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-02-12,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-04-18,Giỗ Tổ Hùng Vương,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-04-30,Ngày Giải phóng miền Nam,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-05-01,Quốc tế Lao động,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2024-09-02,Quốc khánh,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-01-01,Tết Dương lịch,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-01-25,Kỳ nghỉ Tết Nguyên đán,MANUAL_HOLIDAY,0,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-01-28,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-01-29,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-01-30,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-01-31,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-04-07,Giỗ Tổ Hùng Vương,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-04-30,Ngày Giải phóng miền Nam,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-05-01,Quốc tế Lao động,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2025-09-02,Quốc khánh,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-01-01,Tết Dương lịch,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-02-04,Kỳ nghỉ Tết Nguyên đán,MANUAL_HOLIDAY,0,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-02-05,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-02-06,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-02-07,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-02-08,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-02-09,Tết Nguyên đán,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-02-10,Kỳ nghỉ Tết Nguyên đán,MANUAL_HOLIDAY,0,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-04-16,Giỗ Tổ Hùng Vương,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-04-30,Ngày Giải phóng miền Nam,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-05-01,Quốc tế Lao động,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-09-02,Quốc khánh,MANUAL_HOLIDAY,1,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.
+2027-09-03,Ngày nghỉ Quốc khánh theo lịch công chức,MANUAL_HOLIDAY,0,,0,0,VERIFY_OFFICIAL_SCHEDULE,MANUAL_SEED,,NEEDS_VERIFICATION,Ngay le tham khao; doi chieu lich nghi chinh thuc.

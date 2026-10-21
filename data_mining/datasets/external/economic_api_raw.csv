@@ -1,0 +1,25 @@
+﻿year,indicator_code,indicator_name,value,unit,source
+2025,NY.GDP.MKTP.CD,gdp_usd,514697215165.065,,World Bank
+2024,NY.GDP.MKTP.CD,gdp_usd,476324572783.807,,World Bank
+2023,NY.GDP.MKTP.CD,gdp_usd,433805036898.465,,World Bank
+2022,NY.GDP.MKTP.CD,gdp_usd,413445230668.578,,World Bank
+2021,NY.GDP.MKTP.CD,gdp_usd,366474752771.009,,World Bank
+2020,NY.GDP.MKTP.CD,gdp_usd,346615738537.796,,World Bank
+2025,NY.GDP.MKTP.KD.ZG,gdp_growth_pct,8.01882998978245,,World Bank
+2024,NY.GDP.MKTP.KD.ZG,gdp_growth_pct,7.03955197123018,,World Bank
+2023,NY.GDP.MKTP.KD.ZG,gdp_growth_pct,4.97865959483225,,World Bank
+2022,NY.GDP.MKTP.KD.ZG,gdp_growth_pct,8.53750041218142,,World Bank
+2021,NY.GDP.MKTP.KD.ZG,gdp_growth_pct,2.55372852648131,,World Bank
+2020,NY.GDP.MKTP.KD.ZG,gdp_growth_pct,2.86541320912272,,World Bank
+2025,FP.CPI.TOTL.ZG,inflation_pct,3.30999314219739,,World Bank
+2024,FP.CPI.TOTL.ZG,inflation_pct,3.62109273885843,,World Bank
+2023,FP.CPI.TOTL.ZG,inflation_pct,3.25289282667662,,World Bank
+2022,FP.CPI.TOTL.ZG,inflation_pct,3.15650749963111,,World Bank
+2021,FP.CPI.TOTL.ZG,inflation_pct,1.83471554810461,,World Bank
+2020,FP.CPI.TOTL.ZG,inflation_pct,3.22093436652514,,World Bank
+2025,PA.NUS.FCRF,exchange_rate_vnd_per_usd,,,World Bank
+2024,PA.NUS.FCRF,exchange_rate_vnd_per_usd,24164.8858333333,,World Bank
+2023,PA.NUS.FCRF,exchange_rate_vnd_per_usd,23787.3191666666,,World Bank
+2022,PA.NUS.FCRF,exchange_rate_vnd_per_usd,23271.2125,,World Bank
+2021,PA.NUS.FCRF,exchange_rate_vnd_per_usd,23159.7825925925,,World Bank
+2020,PA.NUS.FCRF,exchange_rate_vnd_per_usd,23208.3683333333,,World Bank

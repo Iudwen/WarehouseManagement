@@ -326,6 +326,10 @@ CREATE TABLE IF NOT EXISTS lich_su_ton_kho_central (
         DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Mỗi kho/sản phẩm/ngày chỉ có một bản ghi lịch sử.
+CREATE UNIQUE INDEX IF NOT EXISTS uq_lich_su_ton_kho_central_kho_sp_ngay
+ON lich_su_ton_kho_central (ma_kho, ma_sp, ngay);
+
 
 -- =========================================================
 -- 7. XUẤT HÀNG TỔNG HỢP

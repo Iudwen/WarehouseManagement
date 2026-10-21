@@ -1,0 +1,5 @@
+﻿indicator_code,indicator_name,status,records,error
+NY.GDP.MKTP.CD,gdp_usd,SUCCESS,6,
+NY.GDP.MKTP.KD.ZG,gdp_growth_pct,SUCCESS,6,
+FP.CPI.TOTL.ZG,inflation_pct,SUCCESS,6,
+PA.NUS.FCRF,exchange_rate_vnd_per_usd,SUCCESS,6,

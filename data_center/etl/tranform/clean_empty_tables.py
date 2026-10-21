@@ -50,4 +50,4 @@ def process_table(filename):
 
 if __name__ == "__main__":
     for table in TABLES:
-        process_table(table)
+        process_table(table)    
