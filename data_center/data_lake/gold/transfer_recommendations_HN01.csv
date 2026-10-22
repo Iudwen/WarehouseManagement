@@ -1,0 +1,2 @@
+﻿id,ma_sp,ten_sp,don_vi,nhom_abc_xyz,kho_nguon,ton_kho_nguon,dos_kho_nguon,kho_dich,ton_kho_dich,dos_kho_dich,so_luong_de_xuat,gia_tri_uoc_tinh,muc_do_uu_tien,priority_code,can_cu_de_xuat,ngay_tao
+REC_002,SP004,Chuột Logitech,Cái,BX,HN01,847,56.7,HCM01,131,8.6,25,86845925.0,TRUNG BÌNH (WARNING),MEDIUM,"Kho nhận HCM01 chỉ còn 131 sp (đáp ứng 8.6 ngày xuất, thiếu 21 sp so với định mức an toàn 152 sp). Kho nguồn HN01 đang thặng dư 697 sp khả dụng (đáp ứng 56.7 ngày xuất). Đề xuất điều phối 25 sp để cân bằng tồn kho, phòng ngừa nguy cơ đứt hàng.",2026-10-23 05:17:20

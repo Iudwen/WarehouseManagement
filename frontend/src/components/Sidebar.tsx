@@ -7,9 +7,10 @@ import {
   ArrowUpRight, 
   ArrowLeftRight, 
   ClipboardCheck, 
-  BarChart3,
-  Boxes
+  BrainCircuit
 } from 'lucide-react';
+
+import logoKho from '../assets/logo_kho_da_chi_nhanh.png';
 
 export default function Sidebar() {
   const location = useLocation();
@@ -22,20 +23,22 @@ export default function Sidebar() {
     { path: '/export', label: 'Xuất Kho', icon: ArrowUpRight },
     { path: '/transfer', label: 'Điều Chuyển', icon: ArrowLeftRight },
     { path: '/audit', label: 'Kiểm Kê Kho', icon: ClipboardCheck },
-    { path: '/reports', label: 'Báo Cáo & Thống Kê', icon: BarChart3 },
+    { path: '/reports', label: 'Dự Báo & Data Mining', icon: BrainCircuit },
   ];
 
   return (
     <aside className="w-64 bg-slate-900 text-slate-300 flex flex-col min-h-screen border-r border-slate-800 shrink-0">
       {/* Brand Header */}
-      <div className="p-4 flex items-center gap-3 border-b border-slate-800">
-        <div className="p-2 bg-blue-600 text-white rounded-lg">
-          <Boxes className="w-6 h-6" />
-        </div>
-        <div>
-          <h1 className="font-bold text-white text-base leading-tight tracking-wide">HỆ THỐNG</h1>
-          <p className="text-xs text-blue-400 font-medium">Quản Lý Kho WMS</p>
-        </div>
+      <div className="p-3.5 border-b border-slate-800">
+        <Link to="/" className="block group" title="Về trang tổng quan">
+          <div className="bg-white rounded-xl p-2 shadow-sm border border-slate-700/40 transition-transform duration-200 group-hover:scale-[1.02] flex items-center justify-center">
+            <img
+              src={logoKho}
+              alt="Quản Lý Kho Đa Chi Nhánh"
+              className="w-full h-14 object-contain"
+            />
+          </div>
+        </Link>
       </div>
 
       {/* Navigation Menu */}

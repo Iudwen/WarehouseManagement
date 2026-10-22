@@ -1,0 +1,2 @@
+﻿id,ma_sp,ten_sp,don_vi,nhom_abc_xyz,kho_nguon,ton_kho_nguon,dos_kho_nguon,kho_dich,ton_kho_dich,dos_kho_dich,so_luong_de_xuat,gia_tri_uoc_tinh,muc_do_uu_tien,priority_code,can_cu_de_xuat,ngay_tao
+REC_001,SP001,Laptop Dell,Cái,AX,DN01,657,40.3,HCM01,217,13.4,15,141339930.0,CAO (CRITICAL),HIGH,"Kho nhận HCM01 chỉ còn 217 sp (đáp ứng 13.4 ngày xuất, thiếu 11 sp so với định mức an toàn 228 sp). Kho nguồn DN01 đang thặng dư 429 sp khả dụng (đáp ứng 40.3 ngày xuất). Đề xuất điều phối 15 sp để cân bằng tồn kho, phòng ngừa nguy cơ đứt hàng.",2026-10-23 05:17:20

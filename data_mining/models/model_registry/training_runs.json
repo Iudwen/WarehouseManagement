@@ -1,0 +1,220 @@
+{
+  "total_runs": 14,
+  "successful_runs": 3,
+  "failed_runs": 11,
+  "runs": [
+    {
+      "run_id": "run_20261023_044101",
+      "start_time": "2026-10-23 04:41:01",
+      "end_time": "2026-10-23 04:41:03",
+      "duration_seconds": 2.07,
+      "status": "FAILED",
+      "error_type": "TRAINING_EXCEPTION",
+      "message": "Training exception: cannot import name 'prepare_features' from 'data_mining.models.train_forecast' (D:\\Các hệ thống phân tán\\WarehouseManagement\\data_mining\\models\\train_forecast.py)"
+    },
+    {
+      "run_id": "run_20261023_044203",
+      "start_time": "2026-10-23 04:42:03",
+      "end_time": "2026-10-23 04:42:04",
+      "duration_seconds": 0.88,
+      "status": "SUCCESS",
+      "dataset_info": {
+        "train_rows": 18600,
+        "test_rows": 2940,
+        "train_range": "2025-09-25 -> 2026-07-31",
+        "test_range": "2026-08-01 -> 2026-09-18",
+        "feature_count": 31
+      },
+      "candidate_metrics": {
+        "ridge": {
+          "mae": 13.9645,
+          "rmse": 16.9767
+        },
+        "lightgbm": {
+          "mae": 14.02,
+          "rmse": 17.059
+        }
+      },
+      "evaluation_against_active": {
+        "status": "ACCEPTABLE",
+        "active_version": "v1.0.0-prod-20261023",
+        "model_name": "lightgbm",
+        "active_mae": 14.0044,
+        "candidate_mae": 14.019982733526751,
+        "delta_mae_pct": 0.11,
+        "threshold_pct": 10.0,
+        "recommendation": "APPROVE_FOR_STAGING",
+        "message": "CHAP NHAN: MAE ung vien tang nhe +0.11%, nam trong bien do cho phep (10.0%)."
+      },
+      "staging_saved": true,
+      "production_updated": false,
+      "message": "CHAP NHAN: MAE ung vien tang nhe +0.11%, nam trong bien do cho phep (10.0%)."
+    },
+    {
+      "run_id": "run_20261023_044300",
+      "start_time": "2026-10-23 04:43:00",
+      "end_time": "2026-10-23 04:43:01",
+      "duration_seconds": 0.23,
+      "status": "SUCCESS",
+      "dataset_info": {
+        "train_rows": 18600,
+        "test_rows": 2940,
+        "train_range": "2025-09-25 -> 2026-07-31",
+        "test_range": "2026-08-01 -> 2026-09-18",
+        "feature_count": 31
+      },
+      "candidate_metrics": {
+        "ridge": {
+          "mae": 13.9645,
+          "rmse": 16.9767
+        },
+        "lightgbm": {
+          "mae": 14.02,
+          "rmse": 17.059
+        }
+      },
+      "evaluation_against_active": {
+        "status": "ACCEPTABLE",
+        "active_version": "v1.0.0-prod-20261023",
+        "model_name": "lightgbm",
+        "active_mae": 14.0044,
+        "candidate_mae": 14.019982733526751,
+        "delta_mae_pct": 0.11,
+        "threshold_pct": 10.0,
+        "recommendation": "APPROVE_FOR_STAGING",
+        "message": "CHAP NHAN: MAE ung vien tang nhe +0.11%, nam trong bien do cho phep (10.0%)."
+      },
+      "staging_saved": true,
+      "production_updated": false,
+      "message": "CHAP NHAN: MAE ung vien tang nhe +0.11%, nam trong bien do cho phep (10.0%)."
+    },
+    {
+      "run_id": "run_20261023_044352",
+      "start_time": "2026-10-23 04:43:52",
+      "end_time": "2026-10-23 04:43:52",
+      "duration_seconds": 0.02,
+      "status": "INSUFFICIENT_DATA",
+      "dataset_rows": 10,
+      "message": "Dataset too small (10 rows < 5000 minimum required)."
+    },
+    {
+      "run_id": "run_20261023_044352",
+      "start_time": "2026-10-23 04:43:52",
+      "end_time": "2026-10-23 04:43:52",
+      "duration_seconds": 0.0,
+      "status": "FAILED",
+      "error_type": "FILE_NOT_FOUND",
+      "message": "Analytical dataset not found at: D:\\Các hệ thống phân tán\\WarehouseManagement\\data_mining\\datasets\\non_existent_file.csv"
+    },
+    {
+      "run_id": "run_20261023_044551",
+      "start_time": "2026-10-23 04:45:51",
+      "end_time": "2026-10-23 04:45:51",
+      "duration_seconds": 0.0,
+      "status": "INSUFFICIENT_DATA",
+      "dataset_rows": 10,
+      "message": "Dataset too small (10 rows < 5000 minimum required)."
+    },
+    {
+      "run_id": "run_20261023_044551",
+      "start_time": "2026-10-23 04:45:51",
+      "end_time": "2026-10-23 04:45:51",
+      "duration_seconds": 0.0,
+      "status": "FAILED",
+      "error_type": "FILE_NOT_FOUND",
+      "message": "Analytical dataset not found at: D:\\Các hệ thống phân tán\\WarehouseManagement\\data_mining\\datasets\\non_existent_file.csv"
+    },
+    {
+      "run_id": "run_20261023_044603",
+      "start_time": "2026-10-23 04:46:03",
+      "end_time": "2026-10-23 04:46:03",
+      "duration_seconds": 0.31,
+      "status": "SUCCESS",
+      "dataset_info": {
+        "train_rows": 18600,
+        "test_rows": 2940,
+        "train_range": "2025-09-25 -> 2026-07-31",
+        "test_range": "2026-08-01 -> 2026-09-18",
+        "feature_count": 31
+      },
+      "candidate_metrics": {
+        "ridge": {
+          "mae": 13.9645,
+          "rmse": 16.9767
+        },
+        "lightgbm": {
+          "mae": 14.02,
+          "rmse": 17.059
+        }
+      },
+      "evaluation_against_active": {
+        "status": "ACCEPTABLE",
+        "active_version": "v1.0.0-prod-20261023",
+        "model_name": "lightgbm",
+        "active_mae": 14.0044,
+        "candidate_mae": 14.019982733526751,
+        "delta_mae_pct": 0.11,
+        "threshold_pct": 10.0,
+        "recommendation": "APPROVE_FOR_STAGING",
+        "message": "CHAP NHAN: MAE ung vien tang nhe +0.11%, nam trong bien do cho phep (10.0%)."
+      },
+      "staging_saved": true,
+      "production_updated": false,
+      "message": "CHAP NHAN: MAE ung vien tang nhe +0.11%, nam trong bien do cho phep (10.0%)."
+    },
+    {
+      "run_id": "run_20261023_045046",
+      "start_time": "2026-10-23 04:50:46",
+      "end_time": "2026-10-23 04:50:46",
+      "duration_seconds": 0.0,
+      "status": "INSUFFICIENT_DATA",
+      "dataset_rows": 10,
+      "message": "Dataset too small (10 rows < 5000 minimum required)."
+    },
+    {
+      "run_id": "run_20261023_045046",
+      "start_time": "2026-10-23 04:50:46",
+      "end_time": "2026-10-23 04:50:46",
+      "duration_seconds": 0.0,
+      "status": "FAILED",
+      "error_type": "FILE_NOT_FOUND",
+      "message": "Analytical dataset not found at: D:\\Các hệ thống phân tán\\WarehouseManagement\\data_mining\\datasets\\non_existent_file.csv"
+    },
+    {
+      "run_id": "run_20261023_050737",
+      "start_time": "2026-10-23 05:07:37",
+      "end_time": "2026-10-23 05:07:37",
+      "duration_seconds": 0.01,
+      "status": "INSUFFICIENT_DATA",
+      "dataset_rows": 10,
+      "message": "Dataset too small (10 rows < 5000 minimum required)."
+    },
+    {
+      "run_id": "run_20261023_050737",
+      "start_time": "2026-10-23 05:07:37",
+      "end_time": "2026-10-23 05:07:37",
+      "duration_seconds": 0.0,
+      "status": "FAILED",
+      "error_type": "FILE_NOT_FOUND",
+      "message": "Analytical dataset not found at: D:\\Các hệ thống phân tán\\WarehouseManagement\\data_mining\\datasets\\non_existent_file.csv"
+    },
+    {
+      "run_id": "run_20261023_053621",
+      "start_time": "2026-10-23 05:36:21",
+      "end_time": "2026-10-23 05:36:21",
+      "duration_seconds": 0.02,
+      "status": "INSUFFICIENT_DATA",
+      "dataset_rows": 10,
+      "message": "Dataset too small (10 rows < 5000 minimum required)."
+    },
+    {
+      "run_id": "run_20261023_053621",
+      "start_time": "2026-10-23 05:36:21",
+      "end_time": "2026-10-23 05:36:21",
+      "duration_seconds": 0.0,
+      "status": "FAILED",
+      "error_type": "FILE_NOT_FOUND",
+      "message": "Analytical dataset not found at: D:\\Các hệ thống phân tán\\WarehouseManagement\\data_mining\\datasets\\non_existent_file.csv"
+    }
+  ]
+}

@@ -3,12 +3,15 @@
   "version": "1.0.0",
   "main": "dist/app.js",
   "scripts": {
+    "dev": "ts-node-dev --respawn --transpile-only src/app.ts",
     "build": "tsc && node scripts/copy-assets.js",
     "start": "node dist/app.js",
     "worker": "ts-node src/workers/outboxWorker.ts",
     "worker:all": "ts-node src/workers/outboxWorker.ts --all-nodes",
     "worker:once": "ts-node src/workers/outboxWorker.ts --once",
-    "test": "node tests/test_unit_source_confirm.js && node tests/test_relay_without_created_after.js && node tests/test_outbox_pipeline_verification.js",
+    "test": "node tests/test_unit_source_confirm.js && node tests/test_relay_without_created_after.js && node tests/test_outbox_pipeline_verification.js && node tests/test_data_mining_service.js && node tests/test_io_statistics.js",
+    "test:io": "node tests/test_io_statistics.js",
+    "test:mining": "node tests/test_data_mining_service.js",
     "test:relay": "node tests/test_relay_without_created_after.js",
     "test:pipeline": "node tests/test_outbox_pipeline_verification.js",
     "test:unit": "node tests/test_unit_source_confirm.js"

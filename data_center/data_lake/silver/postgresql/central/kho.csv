@@ -1,5 +1,5 @@
 ﻿ma_kho,ten_kho,dia_chi,thanh_pho,node_name,node_host,node_port,trang_thai,dong_bo_luc
-HN01,Kho H├á Nß╗Öi,H├á Nß╗Öi,H├á Nß╗Öi,NODE_HN,postgres_hn,5432,ONLINE,2026-10-12 09:16:42.978812
-DN01,Kho ─É├á Nß║╡ng,─É├á Nß║╡ng,─É├á Nß║╡ng,NODE_DN,postgres_dn,5432,ONLINE,2026-10-12 09:16:44.175064
-HCM01,Kho Hß╗ô Ch├¡ Minh,TP. Hß╗ô Ch├¡ Minh,Hß╗ô Ch├¡ Minh,NODE_HCM,postgres_hcm,5432,ONLINE,2026-10-12 09:16:45.298683
+HN01,Kho Hà Nội,Hà Nội,Hà Nội,NODE_HN,postgres_hn,5432,ONLINE,2026-10-13 10:11:55.279192
+DN01,Kho Đà Nẵng,Đà Nẵng,Đà Nẵng,NODE_DN,postgres_dn,5432,ONLINE,2026-10-13 10:11:56.376508
+HCM01,Kho Hồ Chí Minh,TP. Hồ Chí Minh,Hồ Chí Minh,NODE_HCM,postgres_hcm,5432,ONLINE,2026-10-13 10:11:57.707437
 TRANSIT,Kho h??ng ??ang v???n chuy???n,,,CENTRAL,,,ONLINE,2026-10-06 11:12:36.290614

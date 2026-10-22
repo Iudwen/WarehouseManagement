@@ -1,12 +1,20 @@
+import sys
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 import csv
 from collections import defaultdict
 from datetime import date
 from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-RAW_FILE = Path("data_mining/datasets/raw/lich_su_xuat_hang.csv")
-GOLD_DIR = Path("data_mining/datasets/gold")
+BASE_DIR = Path(__file__).resolve().parents[1]
+RAW_FILE = BASE_DIR / "data_mining" / "datasets" / "raw" / "lich_su_xuat_hang.csv"
+GOLD_DIR = BASE_DIR / "data_mining" / "datasets" / "gold"
 GOLD_FILE = GOLD_DIR / "lich_su_xuat_hang_gold.csv"
+DATA_LAKE_GOLD_FILE = BASE_DIR / "data_center" / "data_lake" / "gold" / "lich_su_xuat_hang_gold.csv"
 
 KEY_FIELDS = ("ngay", "ma_kho", "ma_sp")
 NUMBER_FIELDS = (
@@ -34,9 +42,12 @@ def to_decimal(value):
         raise ValueError(f"Khong phai so hop le: {value!r}")
 
 
-def build_gold():
-    if not RAW_FILE.exists():
-        raise FileNotFoundError(f"Khong tim thay file Raw: {RAW_FILE}")
+def build_gold(raw_file=None, gold_file=None):
+    raw_path = Path(raw_file) if raw_file else RAW_FILE
+    gold_path = Path(gold_file) if gold_file else GOLD_FILE
+
+    if not raw_path.exists():
+        raise FileNotFoundError(f"Khong tim thay file Raw: {raw_path}")
 
     groups = defaultdict(
         lambda: {
@@ -50,7 +61,7 @@ def build_gold():
     rejected = 0
     valid = 0
 
-    with RAW_FILE.open("r", encoding="utf-8-sig", newline="") as file:
+    with raw_path.open("r", encoding="utf-8-sig", newline="") as file:
         reader = csv.DictReader(file)
 
         if reader.fieldnames != OUTPUT_FIELDS:
@@ -88,32 +99,47 @@ def build_gold():
             except (ValueError, TypeError, KeyError):
                 rejected += 1
 
-    GOLD_DIR.mkdir(parents=True, exist_ok=True)
+    gold_path.parent.mkdir(parents=True, exist_ok=True)
 
-    with GOLD_FILE.open("w", encoding="utf-8-sig", newline="") as file:
-        writer = csv.DictWriter(file, fieldnames=OUTPUT_FIELDS)
-        writer.writeheader()
+    target_paths = [gold_path]
+    if gold_file is None:
+        DATA_LAKE_GOLD_FILE.parent.mkdir(parents=True, exist_ok=True)
+        if DATA_LAKE_GOLD_FILE not in target_paths:
+            target_paths.append(DATA_LAKE_GOLD_FILE)
 
-        for (day, warehouse, product), values in sorted(groups.items()):
-            writer.writerow({
-                "ngay": day,
-                "ma_kho": warehouse,
-                "ma_sp": product,
-                "so_phieu_xuat": format(values["so_phieu_xuat"], "f"),
-                "tong_so_luong_xuat": format(
-                    values["tong_so_luong_xuat"], "f"
-                ),
-                "tong_gia_tri_xuat": format(
-                    values["tong_gia_tri_xuat"], ".2f"
-                ),
-            })
+    for path_to_write in target_paths:
+        path_to_write.parent.mkdir(parents=True, exist_ok=True)
+        with path_to_write.open("w", encoding="utf-8-sig", newline="") as file:
+            writer = csv.DictWriter(file, fieldnames=OUTPUT_FIELDS)
+            writer.writeheader()
+
+            for (day, warehouse, product), values in sorted(groups.items()):
+                writer.writerow({
+                    "ngay": day,
+                    "ma_kho": warehouse,
+                    "ma_sp": product,
+                    "so_phieu_xuat": format(values["so_phieu_xuat"], "f"),
+                    "tong_so_luong_xuat": format(
+                        values["tong_so_luong_xuat"], "f"
+                    ),
+                    "tong_gia_tri_xuat": format(
+                        values["tong_gia_tri_xuat"], ".2f"
+                    ),
+                })
 
     print(f"So dong Raw: {total}")
     print(f"So dong hop le: {valid}")
     print(f"So dong bi loai: {rejected}")
     print(f"So nhom Gold: {len(groups)}")
     print(f"So dong trung da gop: {valid - len(groups)}")
-    print(f"File Gold: {GOLD_FILE}")
+    print(f"File Gold: {gold_path}")
+
+    return {
+        "total": total,
+        "valid": valid,
+        "rejected": rejected,
+        "groups": len(groups),
+    }
 
 
 if __name__ == "__main__":

@@ -1,3 +1,9 @@
+import sys
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import csv
 import os
@@ -7,7 +13,8 @@ from pathlib import Path
 import psycopg
 from psycopg import sql
 
-BRONZE_DIR = Path("/app/data_lake/bronze/postgresql/central")
+DATA_LAKE_DIR = Path(os.getenv("DATA_LAKE_DIR", Path(__file__).resolve().parents[2] / "data_lake"))
+BRONZE_DIR = DATA_LAKE_DIR / "bronze" / "postgresql" / "central"
 
 DB_CONFIG = {
     "host": os.getenv("POSTGRES_HOST", "postgres_central"),

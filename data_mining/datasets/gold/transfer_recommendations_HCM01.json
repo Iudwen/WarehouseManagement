@@ -1,0 +1,52 @@
+{
+  "kho_ap_dung": "HCM01",
+  "thoi_diem_tao": "2026-10-23T05:17:20.758859",
+  "tong_so_de_xuat": 2,
+  "tong_gia_tri_uoc_tinh": 228185855.0,
+  "phan_bo_muc_do": {
+    "HIGH": 1,
+    "MEDIUM": 1,
+    "LOW": 0
+  },
+  "ghi_chu_nghiep_vu": "Đề xuất điều phối mang tính hỗ trợ quyết định (Decision Support System), dựa trên cân bằng mức tồn an toàn và nhu cầu dự báo chuỗi thời gian; hệ thống không tự động tạo phiếu điều chuyển và không tự ý thay đổi số dư tồn kho.",
+  "items": [
+    {
+      "id": "REC_001",
+      "ma_sp": "SP001",
+      "ten_sp": "Laptop Dell",
+      "don_vi": "Cái",
+      "nhom_abc_xyz": "AX",
+      "kho_nguon": "DN01",
+      "ton_kho_nguon": 657,
+      "dos_kho_nguon": 40.3,
+      "kho_dich": "HCM01",
+      "ton_kho_dich": 217,
+      "dos_kho_dich": 13.4,
+      "so_luong_de_xuat": 15,
+      "gia_tri_uoc_tinh": 141339930.0,
+      "muc_do_uu_tien": "CAO (CRITICAL)",
+      "priority_code": "HIGH",
+      "can_cu_de_xuat": "Kho nhận HCM01 chỉ còn 217 sp (đáp ứng 13.4 ngày xuất, thiếu 11 sp so với định mức an toàn 228 sp). Kho nguồn DN01 đang thặng dư 429 sp khả dụng (đáp ứng 40.3 ngày xuất). Đề xuất điều phối 15 sp để cân bằng tồn kho, phòng ngừa nguy cơ đứt hàng.",
+      "ngay_tao": "2026-10-23 05:17:20"
+    },
+    {
+      "id": "REC_002",
+      "ma_sp": "SP004",
+      "ten_sp": "Chuột Logitech",
+      "don_vi": "Cái",
+      "nhom_abc_xyz": "BX",
+      "kho_nguon": "HN01",
+      "ton_kho_nguon": 847,
+      "dos_kho_nguon": 56.7,
+      "kho_dich": "HCM01",
+      "ton_kho_dich": 131,
+      "dos_kho_dich": 8.6,
+      "so_luong_de_xuat": 25,
+      "gia_tri_uoc_tinh": 86845925.0,
+      "muc_do_uu_tien": "TRUNG BÌNH (WARNING)",
+      "priority_code": "MEDIUM",
+      "can_cu_de_xuat": "Kho nhận HCM01 chỉ còn 131 sp (đáp ứng 8.6 ngày xuất, thiếu 21 sp so với định mức an toàn 152 sp). Kho nguồn HN01 đang thặng dư 697 sp khả dụng (đáp ứng 56.7 ngày xuất). Đề xuất điều phối 25 sp để cân bằng tồn kho, phòng ngừa nguy cơ đứt hàng.",
+      "ngay_tao": "2026-10-23 05:17:20"
+    }
+  ]
+}

@@ -1,3 +1,9 @@
+import sys
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import json
 import os
@@ -13,9 +19,8 @@ MONGO_URI = os.getenv(
 )
 DATABASE_NAME = os.getenv("MONGO_DATABASE", "warehouse_events")
 
-BRONZE_DIR = Path(
-    "/app/data_lake/bronze/mongodb"
-)
+DATA_LAKE_DIR = Path(os.getenv("DATA_LAKE_DIR", Path(__file__).resolve().parents[2] / "data_lake"))
+BRONZE_DIR = DATA_LAKE_DIR / "bronze" / "mongodb"
 
 COLLECTIONS = [
     "system_info",

@@ -1,9 +1,16 @@
-
 import csv
 import json
+import os
+import sys
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
+
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
 
 BASE_DIR = Path(__file__).resolve().parents[2] / "data_lake"
 BRONZE_DIR = BASE_DIR / "bronze" / "postgresql" / "central"

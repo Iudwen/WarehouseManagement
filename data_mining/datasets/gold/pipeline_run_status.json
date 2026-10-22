@@ -1,0 +1,77 @@
+{
+  "status": "COMPLETED",
+  "last_run": "2026-10-23T05:17:20.869007",
+  "total_duration_sec": 17.71,
+  "steps": [
+    {
+      "step": 1,
+      "name": "Làm sạch & chuẩn hóa dữ liệu xuất thô -> Gold",
+      "duration_sec": 0.32,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 2,
+      "name": "Tiền xử lý chuỗi thời gian & Zero-filling theo ngày",
+      "duration_sec": 0.38,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 3,
+      "name": "Trích xuất thời tiết lịch sử (Open-Meteo Archive API)",
+      "duration_sec": 3.44,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 4,
+      "name": "Trích xuất lịch & Ngày nghỉ lễ chính thức Việt Nam",
+      "duration_sec": 0.1,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 5,
+      "name": "Tích hợp đa nguồn -> Analytical Dataset (21,960 dòng)",
+      "duration_sec": 0.37,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 6,
+      "name": "Phân tích khám phá dữ liệu đa chiều (EDA & Charts)",
+      "duration_sec": 1.9,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 7,
+      "name": "Feature Engineering, Huấn luyện ML (Ridge/RF/LightGBM), Đánh giá MAE/RMSE & Xuất kết quả",
+      "duration_sec": 7.29,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 8,
+      "name": "Phân loại hàng hóa ABC-XYZ & Gợi ý bố trí kho hỗ trợ quyết định",
+      "duration_sec": 1.27,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 9,
+      "name": "Khai phá luật kết hợp Apriori (Market Basket) & Gợi ý gom cụm picking",
+      "duration_sec": 1.37,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 10,
+      "name": "Cân bằng tồn kho & Đề xuất điều chuyển liên kho hỗ trợ quyết định (DSS)",
+      "duration_sec": 1.28,
+      "status": "SUCCESS"
+    }
+  ],
+  "metrics": {
+    "analytical_rows": 21960,
+    "test_rows": 2940,
+    "best_model": "Linear Ridge Regression",
+    "best_mae": 13.9641,
+    "lightgbm_mae": 14.0044,
+    "abc_items": 20,
+    "association_rules": 378,
+    "transfer_recommendations": 2
+  }
+}

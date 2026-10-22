@@ -3,7 +3,7 @@ import { useLocation } from 'react-router-dom';
 import { useWarehouse } from '../contexts/WarehouseContext';
 import { useAuth } from '../contexts/AuthContext';
 import api from '../services/api';
-import type { MasterData, ImportReceiptListItem, ReceiveItemInput } from '../types';
+import type { MasterData, ReceiveItemInput } from '../types';
 import {
   ArrowDownLeft,
   ArrowUpRight,
@@ -31,6 +31,25 @@ interface FormLineItem {
   don_gia: number;
 }
 
+export interface UnifiedReceiptItem {
+  ma_phieu: string;
+  ma_kho: string;
+  ma_partner: string | null;
+  ten_partner: string | null;
+  ngay: string;
+  trang_thai: string;
+  tong_so_luong: number;
+  tong_tien: number;
+  items: Array<{
+    ma_sp: string;
+    ten_sp: string | null;
+    don_vi: string | null;
+    so_luong: number;
+    don_gia: number;
+    da_nhap?: number;
+  }>;
+}
+
 export default function Inventory() {
   const location = useLocation();
   const { selectedWarehouse } = useWarehouse();
@@ -45,8 +64,8 @@ export default function Inventory() {
   const [master, setMaster] = useState<MasterData | null>(null);
   const [loadingMaster, setLoadingMaster] = useState<boolean>(true);
 
-  // State cho bảng danh sách phiếu nhập
-  const [importReceipts, setImportReceipts] = useState<ImportReceiptListItem[]>([]);
+  // State danh sách phiếu (Dùng chung cho cả Nhập và Xuất)
+  const [receipts, setReceipts] = useState<UnifiedReceiptItem[]>([]);
   const [loadingReceipts, setLoadingReceipts] = useState<boolean>(false);
   const [receiptsError, setReceiptsError] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
@@ -73,37 +92,49 @@ export default function Inventory() {
   const [status, setStatus] = useState({ type: '', text: '' });
 
   // Modals state
-  const [detailModalReceipt, setDetailModalReceipt] = useState<ImportReceiptListItem | null>(null);
+  const [detailModalReceipt, setDetailModalReceipt] = useState<UnifiedReceiptItem | null>(null);
   const [approveRejectModal, setApproveRejectModal] = useState<{
-    receipt: ImportReceiptListItem;
+    receipt: UnifiedReceiptItem;
     type: 'APPROVE' | 'REJECT';
   } | null>(null);
   const [rejectReason, setRejectReason] = useState('');
 
-  const [receiveModalReceipt, setReceiveModalReceipt] = useState<ImportReceiptListItem | null>(null);
+  const [receiveModalReceipt, setReceiveModalReceipt] = useState<UnifiedReceiptItem | null>(null);
   const [receiveInputs, setReceiveInputs] = useState<Record<string, number>>({});
 
-  const [shortageModalReceipt, setShortageModalReceipt] = useState<ImportReceiptListItem | null>(null);
+  const [shortageModalReceipt, setShortageModalReceipt] = useState<UnifiedReceiptItem | null>(null);
   const [shortageAction, setShortageAction] = useState<'ACCEPT' | 'SUPPLEMENT'>('SUPPLEMENT');
   const [shortageNote, setShortageNote] = useState('');
 
   const [actionLoading, setActionLoading] = useState(false);
   const [actionError, setActionError] = useState('');
 
-  // 1. Hàm tải danh sách phiếu nhập kho
-  const fetchImportReceipts = async () => {
-    if (!isImport) return;
+  // 1. Tải danh sách phiếu (Nhập hoặc Xuất)
+  const fetchReceipts = async () => {
     setLoadingReceipts(true);
     setReceiptsError('');
     try {
+      const endpoint = isImport ? '/inventory/import' : '/inventory/export';
       const params: Record<string, string> = { ma_kho: selectedWarehouse };
       if (filterStatus) {
         params.trang_thai = filterStatus;
       }
-      const res = await api.get('/inventory/import', { params });
-      setImportReceipts(res.data?.data || []);
+      const res = await api.get(endpoint, { params });
+      const rawList = res.data?.data || [];
+      const normalized: UnifiedReceiptItem[] = rawList.map((r: any) => ({
+        ma_phieu: isImport ? r.ma_phieu_nhap : r.ma_phieu_xuat,
+        ma_kho: r.ma_kho,
+        ma_partner: isImport ? r.ma_ncc : r.ma_kh,
+        ten_partner: isImport ? r.ten_ncc : r.ten_kh,
+        ngay: isImport ? r.ngay_nhap : r.ngay_xuat,
+        trang_thai: r.trang_thai,
+        tong_so_luong: Number(r.tong_so_luong) || 0,
+        tong_tien: Number(r.tong_tien) || 0,
+        items: r.items || [],
+      }));
+      setReceipts(normalized);
     } catch (err: any) {
-      setReceiptsError(err.response?.data?.message || err.message || 'Lỗi tải danh sách phiếu nhập kho');
+      setReceiptsError(err.response?.data?.message || err.message || (isImport ? 'Lỗi tải danh sách phiếu nhập kho' : 'Lỗi tải danh sách phiếu xuất kho'));
     } finally {
       setLoadingReceipts(false);
     }
@@ -120,13 +151,12 @@ export default function Inventory() {
 
   useEffect(() => {
     setStatus({ type: '', text: '' });
+    setFilterStatus('');
   }, [location.pathname]);
 
-  // 3. Tải lại danh sách phiếu nhập khi đổi kho, đổi filter status hoặc vào tab import
+  // 3. Tải lại danh sách phiếu khi đổi kho, đổi filter status hoặc đổi tab
   useEffect(() => {
-    if (isImport) {
-      fetchImportReceipts();
-    }
+    fetchReceipts();
   }, [selectedWarehouse, isImport, filterStatus]);
 
   // 4. Load Master Data & Khởi tạo line item đầu tiên
@@ -148,14 +178,14 @@ export default function Inventory() {
         const initialPrice = defaultSp ? Number(isImport ? defaultSp.gia_nhap : defaultSp.gia_ban) : 0;
         setLineItems([
           {
-            id: 'item_1',
+            id: '1',
             ma_sp: defaultSp ? defaultSp.ma_sp : '',
             so_luong: 1,
             don_gia: initialPrice,
           },
         ]);
       } catch (err) {
-        console.error('Lỗi khi tải dữ liệu danh mục:', err);
+        console.error('Lỗi khi tải master data:', err);
       } finally {
         setLoadingMaster(false);
       }
@@ -164,20 +194,18 @@ export default function Inventory() {
     fetchMaster();
   }, [selectedWarehouse, isImport]);
 
-  // Thao tác với Line Items
+  // Thêm dòng mới
   const handleAddLineItem = () => {
-    if (!master?.san_pham || master.san_pham.length === 0) return;
-    const selectedSkus = new Set(lineItems.map((item) => item.ma_sp));
-    const availableSp = master.san_pham.find((sp) => !selectedSkus.has(sp.ma_sp)) || master.san_pham[0];
-    const price = availableSp ? Number(isImport ? availableSp.gia_nhap : availableSp.gia_ban) : 0;
+    const defaultSp = master?.san_pham?.[0];
+    const initialPrice = defaultSp ? Number(isImport ? defaultSp.gia_nhap : defaultSp.gia_ban) : 0;
 
     setLineItems((prev) => [
       ...prev,
       {
         id: `item_${Date.now()}_${Math.random().toString(36).substring(2, 5)}`,
-        ma_sp: availableSp.ma_sp,
+        ma_sp: defaultSp ? defaultSp.ma_sp : '',
         so_luong: 1,
-        don_gia: price,
+        don_gia: initialPrice,
       },
     ]);
   };
@@ -254,7 +282,6 @@ export default function Inventory() {
           items: itemsPayload,
         });
         setStatus({ type: 'success', text: `✅ Tạo phiếu nhập kho (${formHeader.ma_phieu}) thành công! Đã chuyển trạng thái Chờ Duyệt.` });
-        fetchImportReceipts();
       } else {
         await api.post('/inventory/export', {
           ma_phieu_xuat: formHeader.ma_phieu,
@@ -262,8 +289,10 @@ export default function Inventory() {
           ma_kh: formHeader.ma_partner,
           items: itemsPayload,
         });
-        setStatus({ type: 'success', text: `✅ Tạo phiếu xuất kho (${formHeader.ma_phieu}) thành công!` });
+        setStatus({ type: 'success', text: `✅ Tạo phiếu xuất kho (${formHeader.ma_phieu}) thành công! Đã chuyển trạng thái Chờ Duyệt.` });
       }
+
+      fetchReceipts();
 
       setFormHeader((prev) => ({
         ...prev,
@@ -289,45 +318,59 @@ export default function Inventory() {
 
   // --- ACTIONS XỬ LÝ THEO VÒNG ĐỜI ---
 
-  // 1. Duyệt phiếu nhập (QUAN_LY_KHO)
+  // 1. Duyệt phiếu (QUAN_LY_KHO / ADMIN)
   const handleApprove = async () => {
     if (!approveRejectModal?.receipt) return;
     setActionLoading(true);
     setActionError('');
+    const { ma_phieu } = approveRejectModal.receipt;
     try {
-      await api.post(`/inventory/import/${approveRejectModal.receipt.ma_phieu_nhap}/approve`);
-      setStatus({ type: 'success', text: `✅ Đã duyệt phiếu nhập ${approveRejectModal.receipt.ma_phieu_nhap} (Chuyển Đã Duyệt).` });
+      const endpoint = isImport
+        ? `/inventory/import/${ma_phieu}/approve`
+        : `/inventory/export/${ma_phieu}/approve`;
+      await api.post(endpoint);
+      setStatus({
+        type: 'success',
+        text: `✅ Đã duyệt ${isImport ? 'phiếu nhập' : 'phiếu xuất'} ${ma_phieu} (Chuyển ĐÃ DUYỆT).`,
+      });
       setApproveRejectModal(null);
-      fetchImportReceipts();
+      fetchReceipts();
     } catch (err: any) {
-      setActionError(err.response?.data?.message || err.message || 'Lỗi duyệt phiếu nhập');
+      setActionError(err.response?.data?.message || err.message || (isImport ? 'Lỗi duyệt phiếu nhập' : 'Lỗi duyệt phiếu xuất'));
     } finally {
       setActionLoading(false);
     }
   };
 
-  // 2. Từ chối phiếu nhập (QUAN_LY_KHO)
+  // 2. Từ chối phiếu (QUAN_LY_KHO / ADMIN)
   const handleReject = async () => {
     if (!approveRejectModal?.receipt) return;
     setActionLoading(true);
     setActionError('');
+    const { ma_phieu } = approveRejectModal.receipt;
     try {
-      await api.post(`/inventory/import/${approveRejectModal.receipt.ma_phieu_nhap}/reject`, {
+      const endpoint = isImport
+        ? `/inventory/import/${ma_phieu}/reject`
+        : `/inventory/export/${ma_phieu}/reject`;
+      await api.post(endpoint, {
         ly_do: rejectReason.trim(),
       });
-      setStatus({ type: 'success', text: `✅ Đã từ chối phiếu nhập ${approveRejectModal.receipt.ma_phieu_nhap}.` });
+      setStatus({
+        type: 'success',
+        text: `✅ Đã từ chối ${isImport ? 'phiếu nhập' : 'phiếu xuất'} ${ma_phieu}.`,
+      });
       setApproveRejectModal(null);
       setRejectReason('');
-      fetchImportReceipts();
+      fetchReceipts();
     } catch (err: any) {
-      setActionError(err.response?.data?.message || err.message || 'Lỗi từ chối phiếu nhập');
+      setActionError(err.response?.data?.message || err.message || (isImport ? 'Lỗi từ chối phiếu nhập' : 'Lỗi từ chối phiếu xuất'));
     } finally {
       setActionLoading(false);
     }
   };
 
-  // 3. Mở Modal Kiểm đếm nhận hàng (NHAN_VIEN_KHO)
-  const openReceiveModal = (receipt: ImportReceiptListItem) => {
+  // 3. Mở Modal Kiểm đếm nhận hàng (NHAN_VIEN_KHO / ADMIN) - Nhập kho
+  const openReceiveModal = (receipt: UnifiedReceiptItem) => {
     setReceiveModalReceipt(receipt);
     const initialInputs: Record<string, number> = {};
     receipt.items?.forEach((it) => {
@@ -337,7 +380,7 @@ export default function Inventory() {
     setActionError('');
   };
 
-  // 4. Xác nhận kiểm đếm thực nhận (NHAN_VIEN_KHO)
+  // 4. Xác nhận kiểm đếm thực nhận (NHAN_VIEN_KHO / ADMIN) - Nhập kho
   const handleConfirmReceive = async () => {
     if (!receiveModalReceipt) return;
     setActionLoading(true);
@@ -357,7 +400,7 @@ export default function Inventory() {
         }
       }
 
-      const res = await api.post(`/inventory/import/${receiveModalReceipt.ma_phieu_nhap}/confirm-receive`, {
+      const res = await api.post(`/inventory/import/${receiveModalReceipt.ma_phieu}/confirm-receive`, {
         items: itemsPayload,
       });
 
@@ -365,17 +408,17 @@ export default function Inventory() {
       if (resData?.has_shortage) {
         setStatus({
           type: 'error',
-          text: `⚠️ Phiếu ${receiveModalReceipt.ma_phieu_nhap}: Phát hiện thiếu hàng khi kiểm đếm. Đã ghi nhận đợt nhập này vào tồn kho và chuyển Quản lý xử lý chênh lệch (THIEU_HANG).`,
+          text: `⚠️ Phiếu ${receiveModalReceipt.ma_phieu}: Phát hiện thiếu hàng khi kiểm đếm. Đã ghi nhận đợt nhập này vào tồn kho và chuyển Quản lý xử lý chênh lệch (THIEU_HANG).`,
         });
       } else {
         setStatus({
           type: 'success',
-          text: `✅ Phiếu ${receiveModalReceipt.ma_phieu_nhap}: Đã kiểm đếm đủ 100% hàng. Phiếu hoàn tất nhập kho (DA_NHAP).`,
+          text: `✅ Phiếu ${receiveModalReceipt.ma_phieu}: Đã kiểm đếm đủ 100% hàng. Phiếu hoàn tất nhập kho (DA_NHAP).`,
         });
       }
 
       setReceiveModalReceipt(null);
-      fetchImportReceipts();
+      fetchReceipts();
     } catch (err: any) {
       setActionError(err.response?.data?.message || err.message || 'Lỗi kiểm đếm nhập kho');
     } finally {
@@ -383,15 +426,15 @@ export default function Inventory() {
     }
   };
 
-  // 5. Mở Modal Xử lý thiếu hàng (QUAN_LY_KHO)
-  const openShortageModal = (receipt: ImportReceiptListItem) => {
+  // 5. Mở Modal Xử lý thiếu hàng (QUAN_LY_KHO / ADMIN) - Nhập kho
+  const openShortageModal = (receipt: UnifiedReceiptItem) => {
     setShortageModalReceipt(receipt);
     setShortageAction('SUPPLEMENT');
     setShortageNote('');
     setActionError('');
   };
 
-  // 6. Xác nhận Xử lý thiếu hàng (QUAN_LY_KHO)
+  // 6. Xác nhận Xử lý thiếu hàng (QUAN_LY_KHO / ADMIN) - Nhập kho
   const handleShortageSubmit = async () => {
     if (!shortageModalReceipt) return;
     setActionLoading(true);
@@ -399,27 +442,50 @@ export default function Inventory() {
 
     try {
       if (shortageAction === 'ACCEPT') {
-        await api.post(`/inventory/import/${shortageModalReceipt.ma_phieu_nhap}/accept-shortage`, {
+        await api.post(`/inventory/import/${shortageModalReceipt.ma_phieu}/accept-shortage`, {
           ly_do: shortageNote.trim(),
         });
         setStatus({
           type: 'success',
-          text: `✅ Đã chấp nhận số lượng thiếu cho phiếu ${shortageModalReceipt.ma_phieu_nhap}. Phiếu đã chốt hoàn tất (DA_NHAP).`,
+          text: `✅ Đã chấp nhận số lượng thiếu cho phiếu ${shortageModalReceipt.ma_phieu}. Phiếu đã chốt hoàn tất (DA_NHAP).`,
         });
       } else {
-        await api.post(`/inventory/import/${shortageModalReceipt.ma_phieu_nhap}/request-supplement`, {
+        await api.post(`/inventory/import/${shortageModalReceipt.ma_phieu}/request-supplement`, {
           ghi_chu: shortageNote.trim(),
         });
         setStatus({
           type: 'success',
-          text: `✅ Đã gửi yêu cầu Nhà cung cấp giao hàng bổ sung cho phiếu ${shortageModalReceipt.ma_phieu_nhap} (Chuyển Chờ Giao Bổ Sung).`,
+          text: `✅ Đã gửi yêu cầu Nhà cung cấp giao hàng bổ sung cho phiếu ${shortageModalReceipt.ma_phieu} (Chuyển Chờ Giao Bổ Sung).`,
         });
       }
 
       setShortageModalReceipt(null);
-      fetchImportReceipts();
+      fetchReceipts();
     } catch (err: any) {
       setActionError(err.response?.data?.message || err.message || 'Lỗi xử lý thiếu hàng');
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  // 7. Xác nhận xuất hàng thực tế (NHAN_VIEN_KHO / ADMIN) - Xuất kho
+  const handleConfirmShip = async (receipt: UnifiedReceiptItem) => {
+    if (!window.confirm(`Xác nhận xuất hàng thực tế cho phiếu ${receipt.ma_phieu}?\nThao tác này sẽ trừ số lượng tồn kho chi nhánh và ghi sổ cái stock_ledger.`)) {
+      return;
+    }
+    setActionLoading(true);
+    try {
+      await api.post(`/inventory/export/${receipt.ma_phieu}/confirm-ship`);
+      setStatus({
+        type: 'success',
+        text: `✅ Phiếu xuất kho ${receipt.ma_phieu} đã được xuất hàng thành công (DA_XUAT). Đã trừ tồn kho và ghi sổ cái!`,
+      });
+      fetchReceipts();
+    } catch (err: any) {
+      setStatus({
+        type: 'error',
+        text: `❌ Lỗi xuất hàng: ${err.response?.data?.message || err.message}`,
+      });
     } finally {
       setActionLoading(false);
     }
@@ -438,6 +504,8 @@ export default function Inventory() {
         return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-orange-50 text-orange-700 border border-orange-200">Chờ Giao Bổ Sung</span>;
       case 'DA_NHAP':
         return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Đã Nhập Kho</span>;
+      case 'DA_XUAT':
+        return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">Đã Xuất Kho</span>;
       case 'TU_CHOI':
         return <span className="px-2.5 py-1 text-xs font-semibold rounded-full bg-slate-100 text-slate-600 border border-slate-300">Từ Chối</span>;
       default:
@@ -455,12 +523,12 @@ export default function Inventory() {
           </div>
           <div>
             <h1 className="text-2xl font-bold text-slate-800">
-              {isImport ? 'Quản Lý Nhập Kho Hàng' : 'Tạo Phiếu Xuất Kho Hàng'}
+              {isImport ? 'Quản Lý Nhập Kho Hàng' : 'Quản Lý Xuất Kho Hàng'}
             </h1>
             <p className="text-xs text-slate-500 mt-0.5">
               {isImport
-                ? 'Quy trình nhập kho 3 giai đoạn: Tạo yêu cầu → Duyệt → Kiểm đếm nhận hàng & Xử lý thiếu'
-                : 'Tạo đơn xuất hàng cho Khách Hàng / Chi Nhánh'}
+                ? 'Nhập hàng từ Nhà Cung Cấp vào chi nhánh hiện tại'
+                : 'Xuất hàng cho Khách Hàng / Đối tác từ chi nhánh hiện tại'}
             </p>
           </div>
         </div>
@@ -474,54 +542,76 @@ export default function Inventory() {
         </div>
       </div>
 
-      {/* Thông báo trạng thái */}
       {status.text && (
-        <div className={`p-4 text-sm font-semibold rounded-xl border flex items-center justify-between shadow-sm ${
-          status.type === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-rose-50 border-rose-200 text-rose-800'
-        }`}>
-          <span>{status.text}</span>
-          <button onClick={() => setStatus({ type: '', text: '' })} className="text-slate-400 hover:text-slate-600">
+        <div
+          className={`p-4 rounded-xl border text-xs flex items-center justify-between shadow-xs transition-all ${
+            status.type === 'success'
+              ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
+              : 'bg-rose-50 border-rose-200 text-rose-800'
+          }`}
+        >
+          <div className="flex items-center gap-2">
+            {status.type === 'success' ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <AlertCircle className="w-4 h-4 shrink-0" />}
+            <span className="font-semibold">{status.text}</span>
+          </div>
+          <button onClick={() => setStatus({ type: '', text: '' })} className="text-slate-400 hover:text-slate-600 cursor-pointer">
             <X className="w-4 h-4" />
           </button>
         </div>
       )}
 
-      {/* Form Container (Hỗ trợ đa sản phẩm) */}
+      {/* FORM TẠO PHIẾU */}
       <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-6">
         <div className="flex items-center justify-between border-b border-slate-100 pb-3">
           <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-            <span>{isImport ? 'Tạo Yêu Cầu Nhập Kho Mới' : 'Tạo Đơn Xuất Kho'}</span>
+            <span>{isImport ? 'Tạo Yêu Cầu Nhập Kho Mới' : 'Tạo Đơn Xuất Kho Mới'}</span>
           </h2>
           <span className="text-xs text-slate-400">Trạng thái ban đầu: <strong>CHO_DUYET</strong></span>
         </div>
 
         <form onSubmit={handleSubmit} className="space-y-6">
-          {/* Thông tin chung */}
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                Mã Phiếu Giao Dịch <Sparkles className="w-3 h-3 text-amber-500" />
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Mã Phiếu Giao Dịch
               </label>
-              <div className="relative">
+              <div className="flex items-center gap-2">
                 <input
                   type="text"
-                  readOnly
-                  className="w-full border border-slate-200 bg-slate-100 p-2.5 rounded-lg text-xs font-mono font-bold text-slate-700 cursor-not-allowed pr-14"
+                  disabled
                   value={formHeader.ma_phieu}
+                  className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-mono font-bold text-slate-600"
                 />
-                <span className="absolute right-2 top-2 text-[10px] bg-amber-100 text-amber-700 px-1.5 py-0.5 rounded font-sans uppercase font-bold">
-                  AUTO
-                </span>
+                <button
+                  type="button"
+                  title="Tạo mã ngẫu nhiên mới"
+                  onClick={() =>
+                    setFormHeader({
+                      ...formHeader,
+                      ma_phieu: generateFrontendCode(isImport, selectedWarehouse),
+                    })
+                  }
+                  className="p-2 border border-slate-200 hover:bg-slate-50 text-slate-500 rounded-lg transition-colors cursor-pointer"
+                >
+                  <Sparkles className="w-4 h-4" />
+                </button>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-semibold text-slate-600 mb-1 flex items-center gap-1">
-                Kho Tiếp Nhận <Lock className="w-3 h-3 text-slate-400" />
+              <label className="block text-xs font-semibold text-slate-600 mb-1">
+                Chi Nhánh Kho Thực Hiện
               </label>
-              <div className="w-full border border-slate-200 bg-slate-100 p-2.5 rounded-lg text-xs font-bold text-slate-700 flex items-center justify-between cursor-not-allowed">
-                <span>{selectedWarehouse} - Chi Nhánh</span>
-                <span className="text-[10px] bg-slate-200 text-slate-600 px-2 py-0.5 rounded uppercase font-semibold">Cố định</span>
+              <div className="flex items-center gap-2">
+                <input
+                  type="text"
+                  disabled
+                  value={`${selectedWarehouse} (Kho đang chọn)`}
+                  className="w-full bg-slate-50 border border-slate-200 p-2 rounded-lg text-xs font-bold text-slate-600"
+                />
+                <div className="p-2 text-slate-400" title="Chuyển đổi kho ở thanh Header trên cùng">
+                  <Lock className="w-4 h-4" />
+                </div>
               </div>
             </div>
 
@@ -546,100 +636,87 @@ export default function Inventory() {
             </div>
           </div>
 
-          {/* Danh sách mặt hàng (Dynamic Line Items) */}
+          {/* Danh sách mặt hàng chi tiết */}
           <div className="space-y-3">
-            <div className="flex items-center justify-between">
-              <label className="text-xs font-bold text-slate-700 uppercase tracking-wider">
-                Danh Sách Sản Phẩm Trong Phiếu ({lineItems.length})
-              </label>
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2">
+              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-500">
+                Chi Tiết Danh Mục Hàng Hóa
+              </h3>
               <button
                 type="button"
                 onClick={handleAddLineItem}
-                className="flex items-center gap-1 text-xs font-bold text-blue-600 hover:text-blue-800 bg-blue-50 hover:bg-blue-100 px-3 py-1.5 rounded-lg transition-colors cursor-pointer"
+                className="flex items-center gap-1.5 text-xs font-bold text-blue-600 hover:text-blue-700 bg-blue-50 hover:bg-blue-100/80 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
               >
                 <Plus className="w-3.5 h-3.5" />
                 <span>Thêm Sản Phẩm</span>
               </button>
             </div>
 
-            <div className="space-y-2 border border-slate-200 rounded-xl p-3 bg-slate-50/50">
-              {lineItems.map((item, index) => {
-                const spInfo = master?.san_pham.find((s) => s.ma_sp === item.ma_sp);
-                const lineTotal = (Number(item.so_luong) || 0) * (Number(item.don_gia) || 0);
+            <div className="space-y-2">
+              {lineItems.map((item, idx) => (
+                <div key={item.id} className="flex items-center gap-3 p-3 bg-slate-50 border border-slate-200 rounded-xl">
+                  <span className="text-xs font-mono font-bold text-slate-400 w-5 text-center">
+                    #{idx + 1}
+                  </span>
 
-                return (
-                  <div key={item.id} className="grid grid-cols-12 gap-3 items-center bg-white p-3 rounded-lg border border-slate-200 shadow-2xs">
-                    <span className="col-span-1 text-xs font-bold text-slate-400 text-center">#{index + 1}</span>
+                  <div className="flex-1">
+                    <select
+                      className="w-full border border-slate-300 p-2 rounded-lg text-xs bg-white focus:outline-blue-500 font-medium"
+                      value={item.ma_sp}
+                      disabled={loadingMaster}
+                      onChange={(e) => handleItemProductChange(item.id, e.target.value)}
+                    >
+                      {master?.san_pham.map((sp) => (
+                        <option key={sp.ma_sp} value={sp.ma_sp}>
+                          {sp.ten_sp} ({sp.ma_sp}) - Đơn vị: {sp.don_vi}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
 
-                    <div className="col-span-4">
-                      <select
-                        className="w-full border border-slate-300 p-2 rounded-lg text-xs font-semibold text-slate-800 focus:outline-blue-500 bg-white"
-                        value={item.ma_sp}
-                        onChange={(e) => handleItemProductChange(item.id, e.target.value)}
-                      >
-                        {master?.san_pham?.map((sp) => (
-                          <option key={sp.ma_sp} value={sp.ma_sp}>
-                            {sp.ten_sp} ({sp.ma_sp})
-                          </option>
-                        ))}
-                      </select>
-                    </div>
+                  <div className="w-28">
+                    <input
+                      type="number"
+                      min="1"
+                      placeholder="Số lượng"
+                      className="w-full border border-slate-300 p-2 rounded-lg text-xs bg-white text-right font-mono font-bold focus:outline-blue-500"
+                      value={item.so_luong}
+                      onChange={(e) => handleItemQtyChange(item.id, parseInt(e.target.value, 10) || 1)}
+                    />
+                  </div>
 
-                    <div className="col-span-2">
-                      <div className="relative">
-                        <input
-                          type="number"
-                          min="1"
-                          className="w-full border border-slate-300 p-2 rounded-lg text-xs font-bold text-slate-800 focus:outline-blue-500 text-right pr-8"
-                          value={item.so_luong}
-                          onChange={(e) => handleItemQtyChange(item.id, Number(e.target.value))}
-                        />
-                        <span className="absolute right-2 top-2 text-[10px] text-slate-400">
-                          {spInfo?.don_vi || 'cái'}
-                        </span>
-                      </div>
-                    </div>
-
-                    <div className="col-span-2">
-                      <div className="relative">
-                        <input
-                          type="text"
-                          readOnly
-                          className="w-full border border-slate-200 bg-slate-100 p-2 rounded-lg text-xs font-mono font-semibold text-slate-600 text-right pr-8"
-                          value={Number(item.don_gia).toLocaleString('vi-VN')}
-                        />
-                        <span className="absolute right-2 top-2 text-[10px] text-slate-400">đ</span>
-                      </div>
-                    </div>
-
-                    <div className="col-span-2 text-right font-mono font-bold text-xs text-slate-800">
-                      {lineTotal.toLocaleString('vi-VN')} đ
-                    </div>
-
-                    <div className="col-span-1 text-center">
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveLineItem(item.id)}
-                        disabled={lineItems.length <= 1}
-                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-30 cursor-pointer"
-                        title="Xóa dòng"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                  <div className="w-36">
+                    <div className="w-full bg-slate-100 border border-slate-200 p-2 rounded-lg text-xs text-right font-mono font-semibold text-slate-700">
+                      {Number(item.don_gia).toLocaleString('vi-VN')} đ
                     </div>
                   </div>
-                );
-              })}
+
+                  <div className="w-40 text-right font-mono font-bold text-xs text-slate-800 pr-2">
+                    {(Number(item.so_luong) * Number(item.don_gia)).toLocaleString('vi-VN')} đ
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveLineItem(item.id)}
+                    disabled={lineItems.length <= 1}
+                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors disabled:opacity-30 disabled:hover:bg-transparent disabled:hover:text-slate-400 cursor-pointer"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex justify-between items-center p-3 bg-slate-100/70 rounded-xl border border-slate-200 text-xs font-bold text-slate-700">
+              <span>Tổng số lượng: <strong className="font-mono text-sm text-slate-900">{totalQuantity.toLocaleString('vi-VN')}</strong> sản phẩm</span>
+              <span>Tổng tiền dự tính: <strong className="font-mono text-sm text-blue-700">{totalAmount.toLocaleString('vi-VN')}</strong> VNĐ</span>
             </div>
           </div>
 
-          {/* Action Bar & Tổng kết */}
-          <div className="pt-4 flex items-center justify-between border-t border-slate-100">
-            <div className="flex items-center gap-6 text-xs text-slate-600">
-              <div>Tổng số lượng: <strong className="text-slate-800 font-mono text-sm">{totalQuantity.toLocaleString('vi-VN')}</strong></div>
-              <div>Tổng tiền: <strong className="text-blue-700 font-mono text-sm">{totalAmount.toLocaleString('vi-VN')} VNĐ</strong></div>
-            </div>
-
+          <div className="flex items-center justify-between pt-4 border-t border-slate-100">
+            <span className="text-[11px] text-slate-400">
+              * Yêu cầu vai trò <strong>NHÂN VIÊN KHO</strong> hoặc <strong>ADMIN</strong> để tạo phiếu.
+            </span>
             <button
               type="submit"
               disabled={formSubmitting || !isNhanVienKho}
@@ -652,181 +729,199 @@ export default function Inventory() {
               }`}
             >
               <CheckCircle2 className="w-4 h-4" />
-              <span>{formSubmitting ? 'Đang gửi...' : isImport ? 'Gửi Yêu Cầu Nhập Kho' : 'Xác Nhận Xuất Kho'}</span>
+              <span>{formSubmitting ? 'Đang gửi...' : isImport ? 'Gửi Yêu Cầu Nhập Kho' : 'Gửi Yêu Cầu Xuất Kho'}</span>
             </button>
           </div>
         </form>
       </div>
 
-      {/* Bảng Danh Sách Phiếu Nhập Kho (Chỉ hiển thị khi ở tab Nhập kho) */}
-      {isImport && (
-        <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
-                <span>Danh Sách Phiếu Nhập Kho</span>
-                <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono font-bold">
-                  {importReceipts.length}
-                </span>
-              </h2>
-              <p className="text-xs text-slate-400 mt-0.5">Theo dõi toàn bộ vòng đời và thực hiện duyệt, nhận hàng, xử lý thiếu</p>
-            </div>
-
-            <div className="flex items-center gap-3">
-              <div className="flex items-center gap-2">
-                <Filter className="w-4 h-4 text-slate-400" />
-                <select
-                  value={filterStatus}
-                  onChange={(e) => setFilterStatus(e.target.value)}
-                  className="text-xs border border-slate-200 bg-slate-50 font-medium p-1.5 rounded-lg focus:outline-blue-500"
-                >
-                  <option value="">Tất cả trạng thái</option>
-                  <option value="CHO_DUYET">Chờ Duyệt (CHO_DUYET)</option>
-                  <option value="DA_DUYET">Đã Duyệt (DA_DUYET)</option>
-                  <option value="THIEU_HANG">Thiếu Hàng (THIEU_HANG)</option>
-                  <option value="CHO_GIAO_BO_SUNG">Chờ Giao Bổ Sung (CHO_GIAO_BO_SUNG)</option>
-                  <option value="DA_NHAP">Đã Nhập (DA_NHAP)</option>
-                  <option value="TU_CHOI">Từ Chối (TU_CHOI)</option>
-                </select>
-              </div>
-
-              <button
-                type="button"
-                onClick={fetchImportReceipts}
-                disabled={loadingReceipts}
-                className="p-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
-                title="Tải lại danh sách"
-              >
-                <RefreshCw className={`w-4 h-4 ${loadingReceipts ? 'animate-spin' : ''}`} />
-              </button>
-            </div>
+      {/* BẢNG LỊCH SỬ DANH SÁCH PHIẾU (HIỂN THỊ CẢ CHO NHẬP VÀ XUẤT) */}
+      <div className="bg-white rounded-xl border border-slate-200 shadow-sm p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <h2 className="text-base font-bold text-slate-800 flex items-center gap-2">
+              <span>{isImport ? 'Danh Sách Phiếu Nhập Kho' : 'Danh Sách Phiếu Xuất Kho'}</span>
+              <span className="text-xs bg-slate-100 text-slate-600 px-2 py-0.5 rounded-full font-mono font-bold">
+                {receipts.length}
+              </span>
+            </h2>
+            <p className="text-xs text-slate-400 mt-0.5">
+              {isImport
+                ? 'Theo dõi toàn bộ vòng đời và thực hiện duyệt, nhận hàng, xử lý thiếu'
+                : 'Theo dõi toàn bộ vòng đời và thực hiện duyệt, xác nhận xuất kho thực tế'}
+            </p>
           </div>
 
-          {receiptsError && (
-            <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs font-semibold text-rose-700">
-              <AlertCircle className="w-4 h-4 shrink-0" />
-              <span>{receiptsError}</span>
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-2">
+              <Filter className="w-4 h-4 text-slate-400" />
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="text-xs border border-slate-200 bg-slate-50 font-medium p-1.5 rounded-lg focus:outline-blue-500"
+              >
+                <option value="">Tất cả trạng thái</option>
+                <option value="CHO_DUYET">Chờ Duyệt (CHO_DUYET)</option>
+                <option value="DA_DUYET">Đã Duyệt (DA_DUYET)</option>
+                {isImport && <option value="THIEU_HANG">Thiếu Hàng (THIEU_HANG)</option>}
+                {isImport && <option value="CHO_GIAO_BO_SUNG">Chờ Giao Bổ Sung (CHO_GIAO_BO_SUNG)</option>}
+                {isImport && <option value="DA_NHAP">Đã Nhập (DA_NHAP)</option>}
+                {!isImport && <option value="DA_XUAT">Đã Xuất Kho (DA_XUAT)</option>}
+                <option value="TU_CHOI">Từ Chối (TU_CHOI)</option>
+              </select>
             </div>
-          )}
 
-          {loadingReceipts && (
-            <div className="py-8 text-center text-slate-400 text-xs font-medium flex items-center justify-center gap-2">
-              <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
-              <span>Đang tải danh sách phiếu nhập kho...</span>
-            </div>
-          )}
+            <button
+              type="button"
+              onClick={fetchReceipts}
+              disabled={loadingReceipts}
+              className="p-1.5 border border-slate-200 hover:bg-slate-50 text-slate-600 rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+              title="Tải lại danh sách"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingReceipts ? 'animate-spin' : ''}`} />
+            </button>
+          </div>
+        </div>
 
-          {!loadingReceipts && !receiptsError && importReceipts.length === 0 && (
-            <div className="py-10 text-center text-slate-400 space-y-2">
-              <FileText className="w-8 h-8 mx-auto text-slate-300" />
-              <p className="text-xs font-medium">Chưa có phiếu nhập nào tại kho {selectedWarehouse} {filterStatus ? `với trạng thái ${filterStatus}` : ''}</p>
-            </div>
-          )}
+        {receiptsError && (
+          <div className="flex items-center gap-2 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs font-semibold text-rose-700">
+            <AlertCircle className="w-4 h-4 shrink-0" />
+            <span>{receiptsError}</span>
+          </div>
+        )}
 
-          {!loadingReceipts && !receiptsError && importReceipts.length > 0 && (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase font-bold tracking-wider">
-                    <th className="py-2.5 px-3">Mã Phiếu</th>
-                    <th className="py-2.5 px-3">Nhà Cung Cấp</th>
-                    <th className="py-2.5 px-3">Ngày Nhập</th>
-                    <th className="py-2.5 px-3 text-right">Tổng SL</th>
-                    <th className="py-2.5 px-3 text-right">Tổng Tiền</th>
-                    <th className="py-2.5 px-3 text-center">Trạng Thái</th>
-                    <th className="py-2.5 px-3 text-center">Thao Tác</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {importReceipts.map((receipt) => (
-                    <tr key={receipt.ma_phieu_nhap} className="hover:bg-slate-50/80 transition-colors">
-                      <td className="py-3 px-3 font-mono font-bold text-slate-800">
-                        {receipt.ma_phieu_nhap}
-                      </td>
-                      <td className="py-3 px-3 font-medium text-slate-700">
-                        {receipt.ten_ncc || receipt.ma_ncc || '—'}
-                      </td>
-                      <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
-                        {new Date(receipt.ngay_nhap).toLocaleString('vi-VN')}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
-                        {receipt.tong_so_luong.toLocaleString('vi-VN')}
-                      </td>
-                      <td className="py-3 px-3 text-right font-mono font-semibold text-slate-700">
-                        {receipt.tong_tien.toLocaleString('vi-VN')} đ
-                      </td>
-                      <td className="py-3 px-3 text-center">
-                        {getStatusBadge(receipt.trang_thai)}
-                      </td>
-                      <td className="py-3 px-3 text-center whitespace-nowrap">
-                        <div className="flex items-center justify-center gap-1.5">
-                          {/* Nút Xem chi tiết (luôn có) */}
+        {loadingReceipts && (
+          <div className="py-8 text-center text-slate-400 text-xs font-medium flex items-center justify-center gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin text-blue-600" />
+            <span>Đang tải danh sách {isImport ? 'phiếu nhập kho' : 'phiếu xuất kho'}...</span>
+          </div>
+        )}
+
+        {!loadingReceipts && !receiptsError && receipts.length === 0 && (
+          <div className="py-10 text-center text-slate-400 space-y-2">
+            <FileText className="w-8 h-8 mx-auto text-slate-300" />
+            <p className="text-xs font-medium">
+              Chưa có {isImport ? 'phiếu nhập' : 'phiếu xuất'} nào tại kho {selectedWarehouse} {filterStatus ? `với trạng thái ${filterStatus}` : ''}
+            </p>
+          </div>
+        )}
+
+        {!loadingReceipts && !receiptsError && receipts.length > 0 && (
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-xs border-collapse">
+              <thead>
+                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase font-bold tracking-wider">
+                  <th className="py-2.5 px-3">Mã Phiếu</th>
+                  <th className="py-2.5 px-3">{isImport ? 'Nhà Cung Cấp' : 'Khách Hàng'}</th>
+                  <th className="py-2.5 px-3">{isImport ? 'Ngày Nhập' : 'Ngày Xuất'}</th>
+                  <th className="py-2.5 px-3 text-right">Tổng SL</th>
+                  <th className="py-2.5 px-3 text-right">Tổng Tiền</th>
+                  <th className="py-2.5 px-3 text-center">Trạng Thái</th>
+                  <th className="py-2.5 px-3 text-center">Thao Tác</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {receipts.map((receipt) => (
+                  <tr key={receipt.ma_phieu} className="hover:bg-slate-50/80 transition-colors">
+                    <td className="py-3 px-3 font-mono font-bold text-slate-800">
+                      {receipt.ma_phieu}
+                    </td>
+                    <td className="py-3 px-3 font-medium text-slate-700">
+                      {receipt.ten_partner || receipt.ma_partner || '—'}
+                    </td>
+                    <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                      {new Date(receipt.ngay).toLocaleString('vi-VN')}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
+                      {receipt.tong_so_luong.toLocaleString('vi-VN')}
+                    </td>
+                    <td className="py-3 px-3 text-right font-mono font-semibold text-slate-700">
+                      {receipt.tong_tien.toLocaleString('vi-VN')} đ
+                    </td>
+                    <td className="py-3 px-3 text-center">
+                      {getStatusBadge(receipt.trang_thai)}
+                    </td>
+                    <td className="py-3 px-3 text-center whitespace-nowrap">
+                      <div className="flex items-center justify-center gap-1.5">
+                        {/* Nút Xem chi tiết */}
+                        <button
+                          type="button"
+                          onClick={() => setDetailModalReceipt(receipt)}
+                          className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                          title="Xem chi tiết phiếu"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                        </button>
+
+                        {/* Nhóm nút Duyệt / Từ chối (Quản lý kho khi CHO_DUYET) */}
+                        {receipt.trang_thai === 'CHO_DUYET' && isQuanLyKho && (
+                          <>
+                            <button
+                              type="button"
+                              onClick={() => setApproveRejectModal({ receipt, type: 'APPROVE' })}
+                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                              title="Duyệt yêu cầu"
+                            >
+                              <Check className="w-3 h-3" />
+                              <span>Duyệt</span>
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setApproveRejectModal({ receipt, type: 'REJECT' })}
+                              className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                              title="Từ chối yêu cầu"
+                            >
+                              <Ban className="w-3 h-3" />
+                              <span>Từ chối</span>
+                            </button>
+                          </>
+                        )}
+
+                        {/* Với Nhập kho: Nhận hàng kiểm đếm */}
+                        {isImport && (receipt.trang_thai === 'DA_DUYET' || receipt.trang_thai === 'CHO_GIAO_BO_SUNG') && isNhanVienKho && (
                           <button
                             type="button"
-                            onClick={() => setDetailModalReceipt(receipt)}
-                            className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-                            title="Xem chi tiết phiếu"
+                            onClick={() => openReceiveModal(receipt)}
+                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
                           >
-                            <Eye className="w-3.5 h-3.5" />
+                            <Truck className="w-3 h-3" />
+                            <span>{receipt.trang_thai === 'CHO_GIAO_BO_SUNG' ? 'Nhận bổ sung' : 'Kiểm đếm nhận'}</span>
                           </button>
+                        )}
 
-                          {/* Nhóm nút Duyệt / Từ chối (Dành cho Quản lý kho khi CHO_DUYET) */}
-                          {receipt.trang_thai === 'CHO_DUYET' && isQuanLyKho && (
-                            <>
-                              <button
-                                type="button"
-                                onClick={() => setApproveRejectModal({ receipt, type: 'APPROVE' })}
-                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1"
-                                title="Duyệt yêu cầu"
-                              >
-                                <Check className="w-3 h-3" />
-                                <span>Duyệt</span>
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => setApproveRejectModal({ receipt, type: 'REJECT' })}
-                                className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1"
-                                title="Từ chối yêu cầu"
-                              >
-                                <Ban className="w-3 h-3" />
-                                <span>Từ chối</span>
-                              </button>
-                            </>
-                          )}
+                        {/* Với Nhập kho: Xử lý thiếu hàng */}
+                        {isImport && receipt.trang_thai === 'THIEU_HANG' && isQuanLyKho && (
+                          <button
+                            type="button"
+                            onClick={() => openShortageModal(receipt)}
+                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1 animate-pulse"
+                          >
+                            <AlertTriangle className="w-3 h-3" />
+                            <span>Xử lý thiếu</span>
+                          </button>
+                        )}
 
-                          {/* Nhóm nút Kiểm đếm nhận hàng (Dành cho Nhân viên kho khi DA_DUYET hoặc CHO_GIAO_BO_SUNG) */}
-                          {(receipt.trang_thai === 'DA_DUYET' || receipt.trang_thai === 'CHO_GIAO_BO_SUNG') && isNhanVienKho && (
-                            <button
-                              type="button"
-                              onClick={() => openReceiveModal(receipt)}
-                              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
-                            >
-                              <Truck className="w-3 h-3" />
-                              <span>{receipt.trang_thai === 'CHO_GIAO_BO_SUNG' ? 'Nhận bổ sung' : 'Kiểm đếm nhận'}</span>
-                            </button>
-                          )}
-
-                          {/* Nhóm nút Xử lý thiếu hàng (Dành cho Quản lý kho khi THIEU_HANG) */}
-                          {receipt.trang_thai === 'THIEU_HANG' && isQuanLyKho && (
-                            <button
-                              type="button"
-                              onClick={() => openShortageModal(receipt)}
-                              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1 animate-pulse"
-                            >
-                              <AlertTriangle className="w-3 h-3" />
-                              <span>Xử lý thiếu</span>
-                            </button>
-                          )}
-                        </div>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
+                        {/* Với Xuất kho: Xác nhận xuất hàng thực tế */}
+                        {!isImport && receipt.trang_thai === 'DA_DUYET' && isNhanVienKho && (
+                          <button
+                            type="button"
+                            onClick={() => handleConfirmShip(receipt)}
+                            className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
+                            title="Xác nhận hàng đã rời kho (trừ tồn kho)"
+                          >
+                            <Truck className="w-3 h-3" />
+                            <span>Xuất hàng</span>
+                          </button>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
 
       {/* MODAL 1: XEM CHI TIẾT PHIẾU */}
       {detailModalReceipt && (
@@ -835,10 +930,12 @@ export default function Inventory() {
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-slate-800 text-base flex items-center gap-2">
-                  <span>Chi Tiết Phiếu Nhập:</span>
-                  <span className="font-mono text-blue-600">{detailModalReceipt.ma_phieu_nhap}</span>
+                  <span>{isImport ? 'Chi Tiết Phiếu Nhập:' : 'Chi Tiết Phiếu Xuất:'}</span>
+                  <span className="font-mono text-blue-600">{detailModalReceipt.ma_phieu}</span>
                 </h3>
-                <p className="text-xs text-slate-400">Kho: {detailModalReceipt.ma_kho} • NCC: {detailModalReceipt.ten_ncc || detailModalReceipt.ma_ncc}</p>
+                <p className="text-xs text-slate-400">
+                  Kho: {detailModalReceipt.ma_kho} • {isImport ? 'NCC: ' : 'Khách hàng: '}{detailModalReceipt.ten_partner || detailModalReceipt.ma_partner || '—'}
+                </p>
               </div>
               <button onClick={() => setDetailModalReceipt(null)} className="p-1 text-slate-400 hover:text-slate-600 rounded-lg cursor-pointer">
                 <X className="w-5 h-5" />
@@ -848,7 +945,7 @@ export default function Inventory() {
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs bg-slate-50 p-2.5 rounded-lg">
                 <span>Trạng thái: <strong>{getStatusBadge(detailModalReceipt.trang_thai)}</strong></span>
-                <span>Ngày tạo: <strong>{new Date(detailModalReceipt.ngay_nhap).toLocaleString('vi-VN')}</strong></span>
+                <span>Ngày tạo: <strong>{new Date(detailModalReceipt.ngay).toLocaleString('vi-VN')}</strong></span>
               </div>
 
               <div className="border border-slate-200 rounded-lg overflow-hidden">
@@ -897,13 +994,15 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* MODAL 2: DUYỆT / TỪ CHỐI (QUAN_LY_KHO) */}
+      {/* MODAL 2: DUYỆT / TỪ CHỐI (QUAN_LY_KHO / ADMIN) */}
       {approveRejectModal && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <h3 className="font-bold text-slate-800 text-base">
-                {approveRejectModal.type === 'APPROVE' ? 'Xác Nhận Duyệt Phiếu Nhập' : 'Từ Chối Phiếu Nhập'}
+                {approveRejectModal.type === 'APPROVE'
+                  ? (isImport ? 'Xác Nhận Duyệt Phiếu Nhập' : 'Xác Nhận Duyệt Phiếu Xuất')
+                  : (isImport ? 'Từ Chối Phiếu Nhập' : 'Từ Chối Phiếu Xuất')}
               </h3>
               <button onClick={() => setApproveRejectModal(null)} className="p-1 text-slate-400 hover:text-slate-600 cursor-pointer">
                 <X className="w-5 h-5" />
@@ -917,16 +1016,17 @@ export default function Inventory() {
             )}
 
             <p className="text-xs text-slate-600 leading-relaxed">
-              Phiếu nhập: <strong className="font-mono text-slate-800">{approveRejectModal.receipt.ma_phieu_nhap}</strong>
+              Mã phiếu: <strong className="font-mono text-slate-800">{approveRejectModal.receipt.ma_phieu}</strong>
               <br />
-              Nhà cung cấp: <strong>{approveRejectModal.receipt.ten_ncc || approveRejectModal.receipt.ma_ncc}</strong>
+              {isImport ? 'Nhà cung cấp: ' : 'Khách hàng: '}
+              <strong>{approveRejectModal.receipt.ten_partner || approveRejectModal.receipt.ma_partner}</strong>
               <br />
               Tổng số lượng: <strong className="font-mono">{approveRejectModal.receipt.tong_so_luong}</strong> • Tổng tiền: <strong className="font-mono">{approveRejectModal.receipt.tong_tien.toLocaleString('vi-VN')} đ</strong>
             </p>
 
             {approveRejectModal.type === 'APPROVE' ? (
               <p className="text-xs text-emerald-700 bg-emerald-50 p-3 rounded-lg border border-emerald-200">
-                Sau khi duyệt, phiếu chuyển trạng thái <strong>ĐÃ DUYỆT (DA_DUYET)</strong> để nhân viên kho tiếp nhận và kiểm đếm thực tế.
+                Sau khi duyệt, phiếu chuyển trạng thái <strong>ĐÃ DUYỆT (DA_DUYET)</strong> để nhân viên kho thực hiện các bước tiếp theo.
               </p>
             ) : (
               <div className="space-y-1.5">
@@ -934,7 +1034,7 @@ export default function Inventory() {
                 <textarea
                   className="w-full border border-slate-300 rounded-lg p-2.5 text-xs focus:outline-blue-500 font-medium"
                   rows={3}
-                  placeholder="Nhập lý do từ chối phiếu (sai giá, vượt ngân sách...)"
+                  placeholder="Nhập lý do từ chối phiếu (sai giá, vượt ngân sách, hết hàng...)"
                   value={rejectReason}
                   onChange={(e) => setRejectReason(e.target.value)}
                 />
@@ -974,14 +1074,14 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* MODAL 3: KIỂM ĐẾM NHẬN HÀNG (NHAN_VIEN_KHO) */}
+      {/* MODAL 3: KIỂM ĐẾM NHẬN HÀNG (NHẬP KHO) */}
       {receiveModalReceipt && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-xl w-full p-6 space-y-4">
             <div className="flex items-center justify-between border-b border-slate-100 pb-3">
               <div>
                 <h3 className="font-bold text-slate-800 text-base">
-                  Kiểm Đếm Thực Nhận: <span className="font-mono text-blue-600">{receiveModalReceipt.ma_phieu_nhap}</span>
+                  Kiểm Đếm Thực Nhận: <span className="font-mono text-blue-600">{receiveModalReceipt.ma_phieu}</span>
                 </h3>
                 <p className="text-xs text-slate-400">
                   {receiveModalReceipt.trang_thai === 'CHO_GIAO_BO_SUNG'
@@ -1002,7 +1102,7 @@ export default function Inventory() {
 
             <div className="space-y-3">
               <div className="flex items-center justify-between text-xs font-semibold text-slate-600 bg-slate-50 p-2.5 rounded-lg">
-                <span>Nhà cung cấp: <strong>{receiveModalReceipt.ten_ncc || receiveModalReceipt.ma_ncc}</strong></span>
+                <span>Nhà cung cấp: <strong>{receiveModalReceipt.ten_partner || receiveModalReceipt.ma_partner}</strong></span>
                 <button
                   type="button"
                   onClick={() => {
@@ -1072,7 +1172,7 @@ export default function Inventory() {
         </div>
       )}
 
-      {/* MODAL 4: XỬ LÝ THIẾU HÀNG (QUAN_LY_KHO) */}
+      {/* MODAL 4: XỬ LÝ THIẾU HÀNG (NHẬP KHO) */}
       {shortageModalReceipt && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-xs flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl border border-slate-200 max-w-md w-full p-6 space-y-4">
@@ -1094,7 +1194,7 @@ export default function Inventory() {
 
             <div className="space-y-3">
               <div className="text-xs bg-rose-50 border border-rose-200 text-rose-800 p-3 rounded-lg leading-relaxed">
-                Phiếu: <strong className="font-mono">{shortageModalReceipt.ma_phieu_nhap}</strong>
+                Phiếu: <strong className="font-mono">{shortageModalReceipt.ma_phieu}</strong>
                 <br />
                 Phát hiện chênh lệch thiếu hàng khi kiểm đếm thực tế. Vui lòng chọn phương án giải quyết:
               </div>

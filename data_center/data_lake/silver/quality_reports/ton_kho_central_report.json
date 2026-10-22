@@ -1,11 +1,11 @@
 {
   "table": "ton_kho_central",
-  "source_file": "D:\\WarehouseManagement\\data_center\\data_lake\\bronze\\postgresql\\central\\ton_kho_central.csv",
-  "silver_file": "D:\\WarehouseManagement\\data_center\\data_lake\\silver\\postgresql\\central\\ton_kho_central.csv",
+  "source_file": "D:\\Các hệ thống phân tán\\WarehouseManagement\\data_center\\data_lake\\bronze\\postgresql\\central\\ton_kho_central.csv",
+  "silver_file": "D:\\Các hệ thống phân tán\\WarehouseManagement\\data_center\\data_lake\\silver\\postgresql\\central\\ton_kho_central.csv",
   "source_rows": 60,
   "silver_rows": 60,
   "rejected_rows": 0,
   "duplicate_rows_detected": 0,
   "invalid_rows": 0,
-  "processed_at": "2026-10-13T17:09:25.737001"
+  "processed_at": "2026-10-23T04:51:27.849383"
 }

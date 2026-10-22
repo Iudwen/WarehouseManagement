@@ -8,6 +8,7 @@ import Transfer from './pages/Transfer';
 import AuditLogs from './pages/AuditLogs';
 import WarehouseMap from './pages/WarehouseMap';
 import Login from './pages/Login';
+import DemandForecast from './pages/DemandForecast';
 
 function AppRoutes() {
   const location = useLocation();
@@ -32,7 +33,9 @@ function AppRoutes() {
         <Route path="/transfer" element={<Transfer />} />
         <Route path="/audit" element={<AuditLogs />} />
         <Route path="/logs" element={<AuditLogs />} />
-        <Route path="/reports" element={<Dashboard />} />
+        <Route path="/reports" element={<DemandForecast />} />
+        <Route path="/data-mining" element={<DemandForecast />} />
+        <Route path="/forecast" element={<DemandForecast />} />
       </Routes>
     </Layout>
   );

@@ -1,10 +1,18 @@
+import os
+import sys
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import json
 from pathlib import Path
 from datetime import datetime
 
-BRONZE_DIR = Path("/app/data_lake/bronze/mongodb")
-SILVER_DIR = Path("/app/data_lake/silver/mongodb")
+DATA_LAKE_DIR = Path(os.getenv("DATA_LAKE_DIR", Path(__file__).resolve().parents[2] / "data_lake"))
+BRONZE_DIR = DATA_LAKE_DIR / "bronze" / "mongodb"
+SILVER_DIR = DATA_LAKE_DIR / "silver" / "mongodb"
 
 
 def parse_mongo_date(value):
