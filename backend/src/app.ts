@@ -17,6 +17,7 @@ import dashboardRoutes from './routes/dashboardRoutes';
 import masterDataRoutes from './routes/masterDataRoutes';
 import alertRoutes from './routes/alertRoutes';
 import auditRoutes from './routes/auditRoutes'; // Bổ sung Audit Route
+import dataMiningRoutes from './routes/dataMiningRoutes'; // Data Mining & Dự báo nhu cầu
 
 const app: Application = express();
 
@@ -46,6 +47,7 @@ app.use('/api/v1/dashboard', dashboardRoutes);
 app.use('/api/v1/master-data', masterDataRoutes);
 app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/audit', auditRoutes); // Đăng ký route xem Log MongoDB
+app.use('/api/v1/data-mining', dataMiningRoutes); // API Data Mining & Dự báo nhu cầu xuất kho
 
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'OK', message: 'Warehouse TypeScript Backend Distributed Core Ready!' });

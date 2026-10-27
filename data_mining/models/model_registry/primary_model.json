@@ -1,0 +1,17 @@
+{
+  "model_name": "Ridge Regression",
+  "selection_metric": "walk_forward_mean_MAE_after_scale_calibration",
+  "validation_mae": {
+    "Ridge Regression": 12.987213919247376,
+    "Gradient Boosting (absolute_error)": 13.298595875902176
+  },
+  "prediction_calibration_scale": 1.1100000000000005,
+  "calibration_selection_metric": "walk_forward_WAPE",
+  "holdout_start_date": "2026-08-17",
+  "holdout_end_date": "2026-10-27",
+  "holdout_rows": 4320,
+  "holdout_wape_percent": 64.21656929109834,
+  "holdout_accuracy_100_minus_wape_percent": 35.78343070890166,
+  "production_training_rows": 21480,
+  "production_training_end_date": "2026-10-27"
+}

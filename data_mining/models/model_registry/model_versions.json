@@ -1,0 +1,216 @@
+{
+  "active_version": "v1.0.0-prod-20261023",
+  "total_versions": 4,
+  "versions": [
+    {
+      "version_id": "v1.0.0-prod-20261023",
+      "created_at": "2026-10-23 04:33:51",
+      "description": "Baseline production models",
+      "dataset_info": {
+        "train_rows": 19020,
+        "test_rows": 2940,
+        "train_range": "2025-01-01 to 2026-07-31",
+        "test_range": "2026-08-01 to 2026-09-18"
+      },
+      "features": [
+        "lag_1",
+        "lag_2",
+        "lag_7",
+        "lag_14",
+        "rolling_mean_7",
+        "rolling_std_7",
+        "dayofweek",
+        "month",
+        "is_weekend",
+        "is_holiday"
+      ],
+      "metrics": {
+        "baseline": {
+          "mae": 14.7431,
+          "rmse": 17.6534
+        },
+        "ridge": {
+          "mae": 13.9641,
+          "rmse": 16.9765
+        },
+        "random_forest": {
+          "mae": 14.281,
+          "rmse": 17.382
+        },
+        "lightgbm": {
+          "mae": 14.0044,
+          "rmse": 17.0346
+        }
+      },
+      "is_active": true
+    },
+    {
+      "version_id": "candidate-run_20261023_044203",
+      "created_at": "2026-10-23 04:42:04",
+      "description": "Automated retraining candidate run_20261023_044203",
+      "dataset_info": {
+        "train_rows": 18600,
+        "test_rows": 2940,
+        "train_range": "2025-09-25 -> 2026-07-31",
+        "test_range": "2026-08-01 -> 2026-09-18",
+        "feature_count": 31
+      },
+      "features": [
+        "lag_1",
+        "lag_7",
+        "rolling_mean_7",
+        "nhiet_do_tb",
+        "luong_mua",
+        "thu_trong_tuan",
+        "la_cuoi_tuan",
+        "la_ngay_le",
+        "ma_kho_DN01",
+        "ma_kho_HCM01",
+        "ma_kho_HN01",
+        "ma_sp_SP001",
+        "ma_sp_SP002",
+        "ma_sp_SP003",
+        "ma_sp_SP004",
+        "ma_sp_SP005",
+        "ma_sp_SP006",
+        "ma_sp_SP007",
+        "ma_sp_SP008",
+        "ma_sp_SP009",
+        "ma_sp_SP010",
+        "ma_sp_SP011",
+        "ma_sp_SP012",
+        "ma_sp_SP013",
+        "ma_sp_SP014",
+        "ma_sp_SP015",
+        "ma_sp_SP016",
+        "ma_sp_SP017",
+        "ma_sp_SP018",
+        "ma_sp_SP019",
+        "ma_sp_SP020"
+      ],
+      "metrics": {
+        "ridge": {
+          "mae": 13.9645,
+          "rmse": 16.9767
+        },
+        "lightgbm": {
+          "mae": 14.02,
+          "rmse": 17.059
+        }
+      },
+      "is_active": false
+    },
+    {
+      "version_id": "candidate-run_20261023_044300",
+      "created_at": "2026-10-23 04:43:01",
+      "description": "Automated retraining candidate run_20261023_044300",
+      "dataset_info": {
+        "train_rows": 18600,
+        "test_rows": 2940,
+        "train_range": "2025-09-25 -> 2026-07-31",
+        "test_range": "2026-08-01 -> 2026-09-18",
+        "feature_count": 31
+      },
+      "features": [
+        "lag_1",
+        "lag_7",
+        "rolling_mean_7",
+        "nhiet_do_tb",
+        "luong_mua",
+        "thu_trong_tuan",
+        "la_cuoi_tuan",
+        "la_ngay_le",
+        "ma_kho_DN01",
+        "ma_kho_HCM01",
+        "ma_kho_HN01",
+        "ma_sp_SP001",
+        "ma_sp_SP002",
+        "ma_sp_SP003",
+        "ma_sp_SP004",
+        "ma_sp_SP005",
+        "ma_sp_SP006",
+        "ma_sp_SP007",
+        "ma_sp_SP008",
+        "ma_sp_SP009",
+        "ma_sp_SP010",
+        "ma_sp_SP011",
+        "ma_sp_SP012",
+        "ma_sp_SP013",
+        "ma_sp_SP014",
+        "ma_sp_SP015",
+        "ma_sp_SP016",
+        "ma_sp_SP017",
+        "ma_sp_SP018",
+        "ma_sp_SP019",
+        "ma_sp_SP020"
+      ],
+      "metrics": {
+        "ridge": {
+          "mae": 13.9645,
+          "rmse": 16.9767
+        },
+        "lightgbm": {
+          "mae": 14.02,
+          "rmse": 17.059
+        }
+      },
+      "is_active": false
+    },
+    {
+      "version_id": "candidate-run_20261023_044603",
+      "created_at": "2026-10-23 04:46:03",
+      "description": "Automated retraining candidate run_20261023_044603",
+      "dataset_info": {
+        "train_rows": 18600,
+        "test_rows": 2940,
+        "train_range": "2025-09-25 -> 2026-07-31",
+        "test_range": "2026-08-01 -> 2026-09-18",
+        "feature_count": 31
+      },
+      "features": [
+        "lag_1",
+        "lag_7",
+        "rolling_mean_7",
+        "nhiet_do_tb",
+        "luong_mua",
+        "thu_trong_tuan",
+        "la_cuoi_tuan",
+        "la_ngay_le",
+        "ma_kho_DN01",
+        "ma_kho_HCM01",
+        "ma_kho_HN01",
+        "ma_sp_SP001",
+        "ma_sp_SP002",
+        "ma_sp_SP003",
+        "ma_sp_SP004",
+        "ma_sp_SP005",
+        "ma_sp_SP006",
+        "ma_sp_SP007",
+        "ma_sp_SP008",
+        "ma_sp_SP009",
+        "ma_sp_SP010",
+        "ma_sp_SP011",
+        "ma_sp_SP012",
+        "ma_sp_SP013",
+        "ma_sp_SP014",
+        "ma_sp_SP015",
+        "ma_sp_SP016",
+        "ma_sp_SP017",
+        "ma_sp_SP018",
+        "ma_sp_SP019",
+        "ma_sp_SP020"
+      ],
+      "metrics": {
+        "ridge": {
+          "mae": 13.9645,
+          "rmse": 16.9767
+        },
+        "lightgbm": {
+          "mae": 14.02,
+          "rmse": 17.059
+        }
+      },
+      "is_active": false
+    }
+  ]
+}

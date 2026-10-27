@@ -2,10 +2,10 @@
   "table": "xuat_hang_central",
   "source_file": "D:\\WarehouseManagement\\data_center\\data_lake\\bronze\\postgresql\\central\\xuat_hang_central.csv",
   "silver_file": "D:\\WarehouseManagement\\data_center\\data_lake\\silver\\postgresql\\central\\xuat_hang_central.csv",
-  "source_rows": 21949,
-  "silver_rows": 21949,
+  "source_rows": 23806,
+  "silver_rows": 23806,
   "rejected_rows": 0,
   "duplicate_rows_detected": 0,
   "invalid_rows": 0,
-  "processed_at": "2026-10-13T17:09:25.618745"
+  "processed_at": "2026-10-27T08:14:34.756896"
 }

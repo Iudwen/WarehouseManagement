@@ -1,6 +1,13 @@
+import sys
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import json
 import os
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -13,9 +20,8 @@ MONGO_URI = os.getenv(
 )
 DATABASE_NAME = os.getenv("MONGO_DATABASE", "warehouse_events")
 
-BRONZE_DIR = Path(
-    "/app/data_lake/bronze/mongodb"
-)
+DATA_LAKE_DIR = Path(os.getenv("DATA_LAKE_DIR", Path(__file__).resolve().parents[2] / "data_lake"))
+BRONZE_DIR = DATA_LAKE_DIR / "bronze" / "mongodb"
 
 COLLECTIONS = [
     "system_info",
@@ -36,26 +42,35 @@ def extract_mongodb():
         client.admin.command("ping")
         db = client[DATABASE_NAME]
 
-        for collection_name in COLLECTIONS:
-            documents = list(db[collection_name].find({}))
+        with tempfile.TemporaryDirectory(
+            prefix=".mongodb-extract-",
+            dir=BRONZE_DIR.parent,
+        ) as staging_dir:
+            staged_dir = Path(staging_dir)
+            for collection_name in COLLECTIONS:
+                documents = list(db[collection_name].find({}))
 
-            output_file = BRONZE_DIR / (
-                f"{collection_name}.json"
-            )
+                output_file = staged_dir / f"{collection_name}.json"
 
-            with output_file.open("w", encoding="utf-8") as file:
-                file.write(
-                    json_util.dumps(
-                        documents,
-                        ensure_ascii=False,
-                        indent=2
+                with output_file.open("w", encoding="utf-8") as file:
+                    file.write(
+                        json_util.dumps(
+                            documents,
+                            ensure_ascii=False,
+                            indent=2
+                        )
                     )
+
+                print(
+                    f"{collection_name}: "
+                    f"{len(documents)} documents -> {BRONZE_DIR / output_file.name}"
                 )
 
-            print(
-                f"{collection_name}: "
-                f"{len(documents)} documents -> {output_file}"
-            )
+            for collection_name in COLLECTIONS:
+                os.replace(
+                    staged_dir / f"{collection_name}.json",
+                    BRONZE_DIR / f"{collection_name}.json",
+                )
 
         print("MongoDB extraction completed.")
 

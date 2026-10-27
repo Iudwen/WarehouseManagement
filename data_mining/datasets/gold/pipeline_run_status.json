@@ -1,0 +1,112 @@
+{
+  "status": "COMPLETED",
+  "last_run": "2026-10-27T14:39:58.788318",
+  "total_duration_sec": 38.44,
+  "data_source": {
+    "source": "PostgreSQL central.xuat_hang_central",
+    "extracted_at": "2026-10-27T14:39:21.011605+07:00",
+    "source_transaction_rows": 21722,
+    "sales_transaction_rows": 0,
+    "future_transaction_rows_ignored": 0,
+    "rows": 12494,
+    "total_quantity": 453549.0,
+    "start_date": "2025-10-28",
+    "end_date": "2026-10-27"
+  },
+  "steps": [
+    {
+      "step": 1,
+      "name": "Trích xuất nhu cầu thực từ PostgreSQL Central",
+      "duration_sec": 0.84,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 2,
+      "name": "Làm sạch & chuẩn hóa dữ liệu xuất thô -> Gold",
+      "duration_sec": 0.43,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 3,
+      "name": "Tiền xử lý chuỗi thời gian & Zero-filling theo ngày",
+      "duration_sec": 0.54,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 4,
+      "name": "Trích xuất thời tiết lịch sử (Open-Meteo Archive API)",
+      "duration_sec": 3.29,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 5,
+      "name": "Trích xuất lịch & Ngày nghỉ lễ chính thức Việt Nam",
+      "duration_sec": 0.17,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 6,
+      "name": "Tích hợp dữ liệu DB/API -> Analytical Dataset",
+      "duration_sec": 0.72,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 7,
+      "name": "Phân tích khám phá dữ liệu đa chiều (EDA & Charts)",
+      "duration_sec": 2.6,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 8,
+      "name": "Tạo đặc trưng, kiểm định thời gian, chọn mô hình và xuất dự báo",
+      "duration_sec": 13.1,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 9,
+      "name": "Huấn luyện & đánh giá dự báo nhu cầu tổng hợp theo tuần",
+      "duration_sec": 6.53,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 10,
+      "name": "Huấn luyện & đánh giá dự báo tổng nhu cầu 15 và 30 ngày",
+      "duration_sec": 6.48,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 11,
+      "name": "Phân loại hàng hóa ABC-XYZ & Gợi ý bố trí kho hỗ trợ quyết định",
+      "duration_sec": 1.33,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 12,
+      "name": "Khai phá luật kết hợp Apriori (Market Basket) & Gợi ý gom cụm picking",
+      "duration_sec": 1.47,
+      "status": "SUCCESS"
+    },
+    {
+      "step": 13,
+      "name": "Cân bằng tồn kho & Đề xuất điều chuyển liên kho hỗ trợ quyết định (DSS)",
+      "duration_sec": 0.94,
+      "status": "SUCCESS"
+    }
+  ],
+  "metrics": {
+    "analytical_rows": 21900,
+    "test_rows": 4320,
+    "best_model": "Ridge Regression",
+    "best_mae": 13.1538,
+    "lightgbm_mae": 13.3831,
+    "primary_wape_percent": 64.2166,
+    "accuracy_100_minus_wape_percent": 35.7834,
+    "accuracy_over_90_percent": false,
+    "horizon_15_day_wape_percent": 16.678,
+    "horizon_30_day_wape_percent": 12.1831,
+    "horizon_live_forecast_status": "READY",
+    "abc_items": 20,
+    "association_rules": 378,
+    "transfer_recommendations": 0
+  }
+}

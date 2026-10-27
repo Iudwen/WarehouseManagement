@@ -1,5 +1,7 @@
-import { Response } from 'express';
+﻿import { Response } from 'express';
+import { Pool } from 'pg';
 import { CustomRequest } from '../types';
+import { getDbPool, pools } from '../config/postgresql';
 import {
   createImportRequest,
   approveImportRequest,
@@ -15,6 +17,39 @@ import {
   confirmExportShipment,
 } from '../services/inventoryService';
 
+/**
+ * Trợ giúp phân giải Database Connection Pool cho các bảng nghiệp vụ chi nhánh
+ * (phieu_nhap, phieu_xuat, ton_kho, stock_ledger chỉ tồn tại ở các Node, không có ở Central)
+ */
+const getBranchPool = (req: CustomRequest, fallbackKhoOrCode?: string): Pool => {
+  if (fallbackKhoOrCode) {
+    const match = fallbackKhoOrCode.match(/^(?:PN|PX|DC)_([A-Za-z0-9]+)_/i);
+    const kho = match ? match[1] : fallbackKhoOrCode;
+    if (kho && kho.toUpperCase() !== 'CENTRAL') {
+      return getDbPool(kho);
+    }
+  }
+
+  if (req.dbPool && req.dbPool !== pools.CENTRAL) {
+    return req.dbPool;
+  }
+
+  const maKhoFromReq =
+    (req.query?.ma_kho as string) ||
+    (req.body?.ma_kho as string) ||
+    (req.headers['x-warehouse-id'] as string);
+
+  if (maKhoFromReq && maKhoFromReq.toUpperCase() !== 'CENTRAL') {
+    return getDbPool(maKhoFromReq);
+  }
+
+  if (req.user?.ma_kho && req.user.ma_kho.toUpperCase() !== 'CENTRAL') {
+    return getDbPool(req.user.ma_kho);
+  }
+
+  return pools.HN;
+};
+
 // ============================================================================
 // HANDLERS CHO LUỒNG NHẬP KHO
 // ============================================================================
@@ -24,11 +59,6 @@ import {
  */
 export const handleListImports = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { vai_tro, ma_kho: userMaKho } = req.user || {};
     const centralRoles = ['ADMIN', 'DIEU_PHOI', 'DATA_ANALYST'];
 
@@ -41,8 +71,9 @@ export const handleListImports = async (req: CustomRequest, res: Response): Prom
     }
 
     const trangThai = (req.query.trang_thai as string) || undefined;
+    const pool = getBranchPool(req, targetKho);
 
-    const data = await listImportReceipts(req.dbPool, targetKho, trangThai);
+    const data = await listImportReceipts(pool, targetKho, trangThai);
     res.status(200).json({
       success: true,
       data,
@@ -57,17 +88,15 @@ export const handleListImports = async (req: CustomRequest, res: Response): Prom
  */
 export const handleImport = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
+    const targetKho = req.body?.ma_kho || req.maKhoContext || 'HN01';
+    const pool = getBranchPool(req, targetKho);
 
     const payload = {
       ...req.body,
-      ma_kho: req.body.ma_kho || req.maKhoContext || 'HN01',
+      ma_kho: targetKho,
     };
 
-    const result = await createImportRequest(req.dbPool, payload);
+    const result = await createImportRequest(pool, payload);
     res.status(201).json({ message: 'Tạo yêu cầu nhập kho thành công (Chờ duyệt)', data: result });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi xử lý nhập kho' });
@@ -79,15 +108,11 @@ export const handleImport = async (req: CustomRequest, res: Response): Promise<v
  */
 export const handleApproveImport = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { maPhieu } = req.params;
+    const pool = getBranchPool(req, maPhieu);
     const adjustedItems = req.body?.items;
 
-    const result = await approveImportRequest(req.dbPool, maPhieu, adjustedItems);
+    const result = await approveImportRequest(pool, maPhieu, adjustedItems);
     res.status(200).json({ message: 'Duyệt phiếu nhập kho thành công', data: result });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi duyệt phiếu nhập kho' });
@@ -99,15 +124,11 @@ export const handleApproveImport = async (req: CustomRequest, res: Response): Pr
  */
 export const handleRejectImport = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { maPhieu } = req.params;
+    const pool = getBranchPool(req, maPhieu);
     const { ly_do } = req.body || {};
 
-    const result = await rejectImportRequest(req.dbPool, maPhieu, ly_do);
+    const result = await rejectImportRequest(pool, maPhieu, ly_do);
     res.status(200).json({ message: 'Từ chối phiếu nhập kho thành công', data: result });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi từ chối phiếu nhập kho' });
@@ -121,16 +142,12 @@ export const handleRejectImport = async (req: CustomRequest, res: Response): Pro
  */
 export const handleConfirmImportReceiving = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { maPhieu } = req.params;
+    const pool = getBranchPool(req, maPhieu);
     const nguoiThucHien = req.user?.ho_ten || req.user?.ma_nguoi_dung || 'NHAN_VIEN_KHO';
     const receivedItems = req.body?.items;
 
-    const result = await confirmImportReceiving(req.dbPool, maPhieu, nguoiThucHien, receivedItems);
+    const result = await confirmImportReceiving(pool, maPhieu, nguoiThucHien, receivedItems);
     res.status(200).json({
       message: result.has_shortage
         ? 'Phát hiện thiếu hàng khi kiểm đếm. Đã ghi nhận đợt này và chuyển Quản lý xử lý chênh lệch.'
@@ -147,15 +164,11 @@ export const handleConfirmImportReceiving = async (req: CustomRequest, res: Resp
  */
 export const handleAcceptImportShortage = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { maPhieu } = req.params;
+    const pool = getBranchPool(req, maPhieu);
     const { ly_do } = req.body || {};
 
-    const result = await acceptImportShortage(req.dbPool, maPhieu, ly_do);
+    const result = await acceptImportShortage(pool, maPhieu, ly_do);
     res.status(200).json({
       message: 'Đã chấp nhận số lượng thiếu hàng và chốt phiếu nhập kho hoàn tất.',
       data: result,
@@ -170,15 +183,11 @@ export const handleAcceptImportShortage = async (req: CustomRequest, res: Respon
  */
 export const handleRequestImportSupplement = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { maPhieu } = req.params;
+    const pool = getBranchPool(req, maPhieu);
     const { ghi_chu } = req.body || {};
 
-    const result = await requestImportSupplement(req.dbPool, maPhieu, ghi_chu);
+    const result = await requestImportSupplement(pool, maPhieu, ghi_chu);
     res.status(200).json({
       message: 'Đã yêu cầu Nhà cung cấp giao hàng bổ sung. Phiếu chuyển trạng thái chờ nhận đợt tiếp.',
       data: result,
@@ -197,11 +206,6 @@ export const handleRequestImportSupplement = async (req: CustomRequest, res: Res
  */
 export const handleListExports = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { vai_tro, ma_kho: userMaKho } = req.user || {};
     const centralRoles = ['ADMIN', 'DIEU_PHOI', 'DATA_ANALYST'];
 
@@ -213,8 +217,9 @@ export const handleListExports = async (req: CustomRequest, res: Response): Prom
     }
 
     const trangThai = (req.query.trang_thai as string) || undefined;
+    const pool = getBranchPool(req, targetKho);
 
-    const data = await listExportReceipts(req.dbPool, targetKho, trangThai);
+    const data = await listExportReceipts(pool, targetKho, trangThai);
     res.status(200).json({
       success: true,
       count: data.length,
@@ -230,17 +235,15 @@ export const handleListExports = async (req: CustomRequest, res: Response): Prom
  */
 export const handleExport = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
+    const targetKho = req.body?.ma_kho || req.maKhoContext || 'HN01';
+    const pool = getBranchPool(req, targetKho);
 
     const payload = {
       ...req.body,
-      ma_kho: req.body.ma_kho || req.maKhoContext || 'HN01',
+      ma_kho: targetKho,
     };
 
-    const result = await createExportRequest(req.dbPool, payload);
+    const result = await createExportRequest(pool, payload);
     res.status(201).json({ message: 'Tạo yêu cầu xuất kho thành công (Chờ duyệt)', data: result });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi xử lý yêu cầu xuất kho' });
@@ -252,15 +255,11 @@ export const handleExport = async (req: CustomRequest, res: Response): Promise<v
  */
 export const handleApproveExport = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { maPhieu } = req.params;
+    const pool = getBranchPool(req, maPhieu);
     const adjustedItems = req.body?.items;
 
-    const result = await approveExportRequest(req.dbPool, maPhieu, adjustedItems);
+    const result = await approveExportRequest(pool, maPhieu, adjustedItems);
     res.status(200).json({ message: 'Duyệt phiếu xuất kho thành công', data: result });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi duyệt phiếu xuất kho' });
@@ -272,15 +271,11 @@ export const handleApproveExport = async (req: CustomRequest, res: Response): Pr
  */
 export const handleRejectExport = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { maPhieu } = req.params;
+    const pool = getBranchPool(req, maPhieu);
     const { ly_do } = req.body || {};
 
-    const result = await rejectExportRequest(req.dbPool, maPhieu, ly_do);
+    const result = await rejectExportRequest(pool, maPhieu, ly_do);
     res.status(200).json({ message: 'Từ chối phiếu xuất kho thành công', data: result });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi từ chối phiếu xuất kho' });
@@ -292,15 +287,11 @@ export const handleRejectExport = async (req: CustomRequest, res: Response): Pro
  */
 export const handleConfirmExportShipment = async (req: CustomRequest, res: Response): Promise<void> => {
   try {
-    if (!req.dbPool) {
-      res.status(500).json({ message: 'Không thể kết nối đến cơ sở dữ liệu chi nhánh' });
-      return;
-    }
-
     const { maPhieu } = req.params;
+    const pool = getBranchPool(req, maPhieu);
     const nguoiThucHien = req.user?.ho_ten || req.user?.ma_nguoi_dung || 'NHAN_VIEN_KHO';
 
-    const result = await confirmExportShipment(req.dbPool, maPhieu, nguoiThucHien);
+    const result = await confirmExportShipment(pool, maPhieu, nguoiThucHien);
     res.status(200).json({ message: 'Xác nhận xuất hàng thành công', data: result });
   } catch (err: any) {
     res.status(400).json({ message: err.message || 'Lỗi xác nhận xuất hàng' });

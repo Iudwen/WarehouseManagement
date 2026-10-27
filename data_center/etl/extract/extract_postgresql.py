@@ -1,13 +1,21 @@
+import sys
+if sys.stdout.encoding and sys.stdout.encoding.lower() != "utf-8":
+    try:
+        sys.stdout.reconfigure(encoding="utf-8")
+    except Exception:
+        pass
 
 import csv
 import os
+import tempfile
 from datetime import datetime
 from pathlib import Path
 
 import psycopg
 from psycopg import sql
 
-BRONZE_DIR = Path("/app/data_lake/bronze/postgresql/central")
+DATA_LAKE_DIR = Path(os.getenv("DATA_LAKE_DIR", Path(__file__).resolve().parents[2] / "data_lake"))
+BRONZE_DIR = DATA_LAKE_DIR / "bronze" / "postgresql" / "central"
 
 DB_CONFIG = {
     "host": os.getenv("POSTGRES_HOST", "postgres_central"),
@@ -27,12 +35,11 @@ TABLES = [
     "nhom_san_pham",
     "san_pham",
     "ton_kho_central",
-    "ton_kho_hien_tai",
     "xuat_hang_central",
 ]
 
 
-def extract_table(conn, table_name):
+def extract_table(conn, table_name, output_dir=None):
     query = sql.SQL("SELECT * FROM {}").format(
         sql.Identifier("public", table_name)
     )
@@ -41,8 +48,9 @@ def extract_table(conn, table_name):
         cur.execute(query)
         columns = [column.name for column in cur.description]
 
-        BRONZE_DIR.mkdir(parents=True, exist_ok=True)
-        output_file = BRONZE_DIR / f"{table_name}.csv"
+        target_dir = output_dir or BRONZE_DIR
+        target_dir.mkdir(parents=True, exist_ok=True)
+        output_file = target_dir / f"{table_name}.csv"
 
         row_count = 0
 
@@ -77,15 +85,26 @@ def main():
             )
             existing_tables = {row[0] for row in cur.fetchall()}
 
-        for table_name in TABLES:
-            if table_name not in existing_tables:
-                print(f"[SKIP] Không tìm thấy bảng: {table_name}")
-                continue
+        missing_tables = sorted(set(TABLES) - existing_tables)
+        if missing_tables:
+            raise RuntimeError(
+                "Thiếu bảng PostgreSQL bắt buộc: " + ", ".join(missing_tables)
+            )
 
-            try:
-                extract_table(conn, table_name)
-            except Exception as exc:
-                print(f"[ERROR] {table_name}: {exc}")
+        BRONZE_DIR.mkdir(parents=True, exist_ok=True)
+        with tempfile.TemporaryDirectory(
+            prefix=".postgresql-extract-",
+            dir=BRONZE_DIR.parent,
+        ) as staging_dir:
+            staged_dir = Path(staging_dir)
+            for table_name in TABLES:
+                extract_table(conn, table_name, staged_dir)
+
+            for table_name in TABLES:
+                os.replace(
+                    staged_dir / f"{table_name}.csv",
+                    BRONZE_DIR / f"{table_name}.csv",
+                )
 
     print(f"Hoàn tất: {datetime.now().isoformat()}")
 

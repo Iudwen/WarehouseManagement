@@ -1,0 +1,11 @@
+{
+  "source": "PostgreSQL central.xuat_hang_central",
+  "extracted_at": "2026-10-27T14:39:21.011605+07:00",
+  "source_transaction_rows": 21722,
+  "sales_transaction_rows": 0,
+  "future_transaction_rows_ignored": 0,
+  "rows": 12494,
+  "total_quantity": 453549.0,
+  "start_date": "2025-10-28",
+  "end_date": "2026-10-27"
+}

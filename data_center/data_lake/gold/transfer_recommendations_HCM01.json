@@ -1,0 +1,17 @@
+{
+  "status": "BLOCKED_FORECAST_DATA",
+  "forecast_source": "weekly_next_forecast.csv",
+  "kho_ap_dung": "HCM01",
+  "thoi_diem_tao": "2026-10-27T15:23:30.502944",
+  "tong_so_de_xuat": 0,
+  "tong_gia_tri_uoc_tinh": 0,
+  "phan_bo_muc_do": {
+    "HIGH": 0,
+    "MEDIUM": 0,
+    "LOW": 0
+  },
+  "inventory_analysis_status": "BLOCKED_FORECAST_DATA",
+  "inventory_analysis": [],
+  "ghi_chu_nghiep_vu": "Không tạo đề xuất điều chuyển vì chưa có dự báo tuần kế tiếp đủ tin cậy. A next-week forecast requires data through a complete Sunday. Dự báo holdout lịch sử không được dùng thay cho dự báo tương lai.",
+  "items": []
+}

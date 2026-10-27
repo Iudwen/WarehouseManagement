@@ -1,0 +1,79 @@
+{
+  "source_latest_observation_date": "2026-10-27",
+  "source_age_days": 0,
+  "horizons": {
+    "15": {
+      "selected_model": "Ridge Regression",
+      "calibration_scale": 1.0200000000000005,
+      "validation_metrics_wape_percent": {
+        "Ridge Regression": 18.382608498485286,
+        "30-day rolling mean baseline": 21.57167311228048
+      },
+      "validation_origins": 5,
+      "holdout_metrics": {
+        "Ridge Regression": {
+          "mae_units_per_series_horizon": 51.65957515672942,
+          "rmse_units_per_series_horizon": 88.53413546834601,
+          "mape_percent": 58.40556349578341,
+          "mape_excluded_zero_actual_rows": 3,
+          "mape_included_rows": 297,
+          "wape_percent": 16.678008423032615
+        },
+        "30-day rolling mean baseline": {
+          "mae_units_per_series_horizon": 59.531666666666666,
+          "rmse_units_per_series_horizon": 106.77293274358753,
+          "mape_percent": 41.73328338892537,
+          "mape_excluded_zero_actual_rows": 3,
+          "mape_included_rows": 297,
+          "wape_percent": 19.21946967414231
+        }
+      },
+      "holdout_origins": [
+        "2026-08-09",
+        "2026-08-24",
+        "2026-09-08",
+        "2026-09-23",
+        "2026-10-08"
+      ],
+      "holdout_rows": 300,
+      "holdout_start_date": "2026-08-10",
+      "holdout_end_date": "2026-10-23"
+    },
+    "30": {
+      "selected_model": "Ridge Regression",
+      "calibration_scale": 0.9900000000000004,
+      "validation_metrics_wape_percent": {
+        "Ridge Regression": 12.542091158028876,
+        "30-day rolling mean baseline": 13.927760210216897
+      },
+      "validation_origins": 3,
+      "holdout_metrics": {
+        "Ridge Regression": {
+          "mae_units_per_series_horizon": 75.62509471415368,
+          "rmse_units_per_series_horizon": 121.08431012277232,
+          "mape_percent": 40.48588194286478,
+          "mape_excluded_zero_actual_rows": 0,
+          "mape_included_rows": 180,
+          "wape_percent": 12.18307666360669
+        },
+        "30-day rolling mean baseline": {
+          "mae_units_per_series_horizon": 97.84444444444445,
+          "rmse_units_per_series_horizon": 163.6652749431663,
+          "mape_percent": 32.468267007287665,
+          "mape_excluded_zero_actual_rows": 0,
+          "mape_included_rows": 180,
+          "wape_percent": 15.762576857329528
+        }
+      },
+      "holdout_origins": [
+        "2026-07-28",
+        "2026-08-27",
+        "2026-09-26"
+      ],
+      "holdout_rows": 180,
+      "holdout_start_date": "2026-07-29",
+      "holdout_end_date": "2026-10-26"
+    }
+  },
+  "note": "Direct cumulative horizon forecasts. Holdout origins are spaced by the forecast horizon to prevent overlap between evaluated target windows. The 30-day result has few independent holdout windows and must be interpreted with that limitation."
+}

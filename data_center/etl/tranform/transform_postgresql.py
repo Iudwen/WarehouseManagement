@@ -1,52 +1,74 @@
-
 import csv
 import json
-from collections import Counter
+import os
+import sys
 from datetime import datetime
+from decimal import Decimal, InvalidOperation
 from pathlib import Path
 
-BASE_DIR = Path(__file__).resolve().parents[2] / "data_lake"
+if sys.stdout.encoding and sys.stdout.encoding.lower() != 'utf-8':
+    try:
+        sys.stdout.reconfigure(encoding='utf-8')
+    except Exception:
+        pass
+
+BASE_DIR = Path(
+    os.getenv("DATA_LAKE_DIR", Path(__file__).resolve().parents[2] / "data_lake")
+)
 BRONZE_DIR = BASE_DIR / "bronze" / "postgresql" / "central"
 SILVER_DIR = BASE_DIR / "silver" / "postgresql" / "central"
 REJECT_DIR = BASE_DIR / "silver" / "quality_reports"
 
 TABLE_RULES = {
     "xuat_hang_central": {
-        "required": ["id", "ma_phieu_xuat", "ma_kho", "ma_sp", "ngay_xuat", "so_luong"],
+        "columns": ["id", "ma_phieu_xuat", "ma_kho", "ma_sp", "ngay_xuat", "so_luong", "don_gia", "thanh_tien", "source_node", "created_at"],
+        "required": ["id", "ma_phieu_xuat", "ma_kho", "ma_sp", "ngay_xuat", "so_luong", "don_gia", "thanh_tien"],
         "key": ["id"],
         "dates": ["ngay_xuat", "created_at"],
         "numbers": ["id", "so_luong", "don_gia", "thanh_tien"],
-        "positive": ["so_luong"],
+        "integers": ["id", "so_luong"],
+        "positive": ["id", "so_luong"],
+        "non_negative": ["don_gia", "thanh_tien"],
     },
     "nhap_hang_central": {
-        "required": ["id", "ma_phieu_nhap", "ma_kho", "ma_sp", "ngay_nhap", "so_luong"],
+        "columns": ["id", "ma_phieu_nhap", "ma_kho", "ma_sp", "ngay_nhap", "so_luong", "don_gia", "thanh_tien", "source_node", "created_at"],
+        "required": ["id", "ma_phieu_nhap", "ma_kho", "ma_sp", "ngay_nhap", "so_luong", "don_gia", "thanh_tien"],
         "key": ["id"],
         "dates": ["ngay_nhap", "created_at"],
         "numbers": ["id", "so_luong", "don_gia", "thanh_tien"],
-        "positive": ["so_luong"],
+        "integers": ["id", "so_luong"],
+        "positive": ["id", "so_luong"],
+        "non_negative": ["don_gia", "thanh_tien"],
     },
     "dieu_chuyen_central": {
-        "required": ["id", "ma_phieu_dc", "kho_xuat", "kho_nhap", "ma_sp", "so_luong"],
+        "columns": ["id", "ma_phieu_dc", "kho_xuat", "kho_nhap", "ma_sp", "so_luong", "ngay_dieu_chuyen", "trang_thai", "source_node", "created_at"],
+        "required": ["id", "ma_phieu_dc", "kho_xuat", "kho_nhap", "ma_sp", "so_luong", "ngay_dieu_chuyen"],
         "key": ["id"],
         "dates": ["ngay_dieu_chuyen", "created_at"],
         "numbers": ["id", "so_luong"],
-        "positive": ["so_luong"],
+        "integers": ["id", "so_luong"],
+        "positive": ["id", "so_luong"],
     },
     "kho": {
+        "columns": ["ma_kho", "ten_kho", "dia_chi", "thanh_pho", "node_name", "node_host", "node_port", "trang_thai", "dong_bo_luc"],
         "required": ["ma_kho", "ten_kho"],
         "key": ["ma_kho"],
         "dates": ["dong_bo_luc"],
         "numbers": ["node_port"],
-        "positive": [],
+        "integers": ["node_port"],
+        "positive": ["node_port"],
     },
     "san_pham": {
-        "required": ["ma_sp", "ten_sp"],
+        "columns": ["ma_sp", "ten_sp", "ma_nhom", "don_vi", "gia_nhap", "gia_ban", "ton_toi_thieu", "ton_an_toan", "trang_thai"],
+        "required": ["ma_sp", "ten_sp", "ma_nhom", "don_vi", "gia_nhap", "gia_ban", "ton_toi_thieu", "ton_an_toan"],
         "key": ["ma_sp"],
         "dates": [],
         "numbers": ["gia_nhap", "gia_ban", "ton_toi_thieu", "ton_an_toan"],
-        "positive": [],
+        "integers": ["gia_nhap", "gia_ban", "ton_toi_thieu", "ton_an_toan"],
+        "non_negative": ["gia_nhap", "gia_ban", "ton_toi_thieu", "ton_an_toan"],
     },
     "nhom_san_pham": {
+        "columns": ["ma_nhom", "ten_nhom"],
         "required": ["ma_nhom", "ten_nhom"],
         "key": ["ma_nhom"],
         "dates": [],
@@ -54,47 +76,54 @@ TABLE_RULES = {
         "positive": [],
     },
     "ton_kho_central": {
+        "columns": ["ma_kho", "ma_sp", "so_luong", "cap_nhat_luc", "source_node"],
         "required": ["ma_kho", "ma_sp", "so_luong"],
         "key": ["ma_kho", "ma_sp"],
         "dates": ["cap_nhat_luc"],
         "numbers": ["so_luong"],
-        "positive": [],
-    },
-    "ton_kho_hien_tai": {
-        "required": ["ma_kho", "ma_sp", "so_luong"],
-        "key": ["ma_kho", "ma_sp"],
-        "dates": ["cap_nhat_luc"],
-        "numbers": ["so_luong"],
+        "integers": ["so_luong"],
+        "non_negative": ["so_luong"],
         "positive": [],
     },
     "lich_su_ton_kho_central": {
-        "required": ["id", "ma_kho", "ma_sp", "ngay"],
+        "columns": ["id", "ma_kho", "ma_sp", "ngay", "ton_dau", "nhap", "xuat", "dieu_chuyen_vao", "dieu_chuyen_ra", "ton_cuoi", "source_node", "created_at"],
+        "required": ["id", "ma_kho", "ma_sp", "ngay", "ton_dau", "nhap", "xuat", "dieu_chuyen_vao", "dieu_chuyen_ra", "ton_cuoi"],
         "key": ["id"],
         "dates": ["ngay", "created_at"],
         "numbers": [
             "id", "ton_dau", "nhap", "xuat",
             "dieu_chuyen_vao", "dieu_chuyen_ra", "ton_cuoi"
         ],
-        "positive": [],
+        "integers": ["id", "ton_dau", "nhap", "xuat", "dieu_chuyen_vao", "dieu_chuyen_ra", "ton_cuoi"],
+        "positive": ["id"],
+        "non_negative": ["ton_dau", "nhap", "xuat", "dieu_chuyen_vao", "dieu_chuyen_ra", "ton_cuoi"],
     },
     "demand_forecast": {
+        "columns": ["id", "ma_kho", "ma_sp", "forecast_date", "predicted_quantity", "model_name", "created_at"],
         "required": ["id", "ma_kho", "ma_sp", "forecast_date", "predicted_quantity"],
         "key": ["id"],
         "dates": ["forecast_date", "created_at"],
         "numbers": ["id", "predicted_quantity"],
-        "positive": [],
+        "integers": ["id"],
+        "positive": ["id"],
+        "non_negative": ["predicted_quantity"],
     },
     "ban_hang_central": {
-        "required": [],
-        "key": [],
-        "dates": [],
-        "numbers": [],
-        "positive": [],
+        "columns": ["id", "ma_phieu_xuat", "ma_kho", "ma_sp", "ngay_ban", "so_luong", "don_gia", "thanh_tien", "source_node", "created_at"],
+        "required": ["id", "ma_phieu_xuat", "ma_kho", "ma_sp", "ngay_ban", "so_luong", "don_gia", "thanh_tien"],
+        "key": ["id"],
+        "dates": ["ngay_ban", "created_at"],
+        "numbers": ["id", "so_luong", "don_gia", "thanh_tien"],
+        "integers": ["id", "so_luong"],
+        "positive": ["id", "so_luong"],
+        "non_negative": ["don_gia", "thanh_tien"],
     },
 }
 
 
 def parse_date(value):
+    if value is None:
+        return None
     value = value.strip()
     if not value:
         return
@@ -110,8 +139,7 @@ def transform_table(table, rules):
     rejected_file = REJECT_DIR / f"{table}_rejected.csv"
 
     if not source.exists():
-        print(f"[SKIP] Không tìm thấy {source.name}")
-        return
+        raise FileNotFoundError(f"Không tìm thấy bảng Bronze bắt buộc: {source}")
 
     accepted = []
     rejected = []
@@ -127,6 +155,12 @@ def transform_table(table, rules):
             return
 
         columns = reader.fieldnames
+        missing_columns = sorted(set(rules["columns"]) - set(columns))
+        if missing_columns:
+            raise ValueError(
+                f"Schema Bronze không hợp lệ cho {table}; thiếu cột: "
+                + ", ".join(missing_columns)
+            )
 
         for row_number, original in enumerate(reader, start=2):
             row = {
@@ -152,15 +186,19 @@ def transform_table(table, rules):
                 if field not in columns or not row.get(field):
                     continue
                 try:
-                    number = float(row[field])
-                    if number != number or abs(number) == float("inf"):
+                    number = Decimal(row[field])
+                    if not number.is_finite():
                         raise ValueError
-                except ValueError:
-                    errors.append(f_SO_LOI(field))
+                except (InvalidOperation, ValueError):
+                    errors.append(f"SO_KHONG_HOP_LE:{field}")
                     continue
 
-                if field in rules["positive"] and number <= 0:
+                if field in rules.get("integers", []) and number != number.to_integral_value():
+                    errors.append(f"SO_KHONG_PHAI_SO_NGUYEN:{field}")
+                if field in rules.get("positive", []) and number <= 0:
                     errors.append(f"SO_LUONG_KHONG_DUONG:{field}")
+                if field in rules.get("non_negative", []) and number < 0:
+                    errors.append(f"SO_LUONG_AM:{field}")
 
             key_fields = rules["key"]
             if key_fields and all(row.get(field) for field in key_fields):
@@ -218,19 +256,19 @@ def transform_table(table, rules):
         f"Silver={len(accepted)}, lỗi={len(rejected)}, "
         f"trùng khóa={duplicate_count}"
     )
-
-
-def _f_so_loi(field):
-    return f"SO_KHONG_HOP_LE:{field}"
-
-
-def f_SO_LOI(field):
-    return _f_so_loi(field)
+    return report
 
 
 def main():
+    total_rejected = 0
     for table, rules in TABLE_RULES.items():
-        transform_table(table, rules)
+        report = transform_table(table, rules)
+        total_rejected += report["rejected_rows"]
+    if total_rejected:
+        raise RuntimeError(
+            f"Silver từ chối {total_rejected} dòng dữ liệu; dừng ETL để không "
+            "tạo Gold từ snapshot một phần. Xem báo cáo trong quality_reports."
+        )
 
 
 if __name__ == "__main__":

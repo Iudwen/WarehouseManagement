@@ -1,0 +1,6 @@
+{
+  "status": "BLOCKED_SOURCE_NOT_READY",
+  "latest_observation_date": "2026-10-27",
+  "source_age_days": 0,
+  "reason": "A next-week forecast requires data through a complete Sunday."
+}

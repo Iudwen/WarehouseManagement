@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import type { LoginResponse } from '../types';
+import logoKho from '../assets/logo_kho_da_chi_nhanh.png';
 
 export default function Login() {
   const [username, setUsername] = useState('');
@@ -53,9 +54,21 @@ export default function Login() {
   };
 
   return (
-    <div className="flex items-center justify-center min-h-screen bg-slate-100">
-      <form onSubmit={handleLogin} className="p-8 bg-white rounded-xl shadow-md w-96 space-y-4">
-        <h2 className="text-2xl font-bold text-center text-slate-800">Đăng Nhập Hệ Thống Kho</h2>
+    <div className="flex items-center justify-center min-h-screen bg-slate-100 p-4">
+      <form onSubmit={handleLogin} className="p-8 bg-white rounded-2xl shadow-xl border border-slate-200/70 w-full max-w-md space-y-4">
+        <div className="flex flex-col items-center mb-2">
+          <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-100 shadow-inner mb-3 w-full flex justify-center">
+            <img
+              src={logoKho}
+              alt="Hệ Thống Quản Lý Kho Đa Chi Nhánh"
+              className="h-20 w-auto object-contain"
+            />
+          </div>
+          <h2 className="text-xl font-extrabold text-center text-slate-800">Đăng Nhập Hệ Thống</h2>
+          <p className="text-xs text-slate-500 font-medium text-center mt-0.5">
+            Hệ thống phân tán đa chi nhánh (HN01 • DN01 • HCM01)
+          </p>
+        </div>
 
         {errorMessage && (
           <div className="p-3 bg-red-50 border border-red-200 text-red-700 text-sm rounded-lg flex items-center gap-2">

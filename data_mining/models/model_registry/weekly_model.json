@@ -1,0 +1,39 @@
+{
+  "model_name": "Extra Trees Regressor (weekly)",
+  "selection_metric": "walk_forward_calibrated_WAPE",
+  "validation_metrics": {
+    "Extra Trees Regressor (weekly)": {
+      "mae": 34.423186395153934,
+      "wape_percent": 23.305932770239153,
+      "calibration_scale": 1.0000000000000004
+    },
+    "Ridge Regression (weekly)": {
+      "mae": 37.13404878069449,
+      "wape_percent": 25.14129965875221,
+      "calibration_scale": 0.9700000000000004
+    },
+    "Gradient Boosting (weekly)": {
+      "mae": 36.1233366782914,
+      "wape_percent": 24.457005414800705,
+      "calibration_scale": 1.0500000000000005
+    },
+    "Random Forest Regressor (weekly)": {
+      "mae": 36.12232042805742,
+      "wape_percent": 24.456317371010712,
+      "calibration_scale": 1.0000000000000004
+    }
+  },
+  "holdout_start_week": "2026-08-24",
+  "holdout_end_week": "2026-10-19",
+  "holdout_weeks": 9,
+  "holdout_rows": 540,
+  "holdout_training_end_week": "2026-08-17",
+  "holdout_wape_percent": 23.528740990141902,
+  "holdout_accuracy_100_minus_wape_percent": 76.4712590098581,
+  "production_training_rows": 2580,
+  "production_training_end_week": "2026-10-19",
+  "source_start_date": "2025-10-28",
+  "source_latest_observation_date": "2026-10-27",
+  "source_age_days": 0,
+  "note": "Weekly sum forecast; evaluated as a one-week-ahead rolling forecast. The latest source week may be partial and is excluded from weekly targets."
+}

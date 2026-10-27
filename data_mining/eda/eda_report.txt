@@ -1,0 +1,56 @@
+================================================================================
+BÁO CÁO PHÂN TÍCH KHÁM PHÁ DỮ LIỆU ĐA CHIỀU (EDA) - DATA MINING
+Nguồn dữ liệu: analytical_dataset.csv (Xuất kho + Thời tiết Open-Meteo + Lịch lễ VN)
+================================================================================
+
+1. TỔNG QUAN DỮ LIỆU:
+- Tổng số quan sát (Dòng): 21,900
+- Số ngày quan sát: 366 ngày (Từ 18/09/2025 đến 18/09/2026)
+- Số kho: 3 | Số sản phẩm: 20
+- Tổng lượng xuất hàng toàn hệ thống: 453,549 đơn vị
+- Số bản ghi có nhu cầu xuất = 0: 9,406 (42.95%)
+  (Nhận xét: Khoảng 35% cặp kho-sản phẩm trong ngày không phát sinh xuất hàng).
+
+2. LƯỢNG XUẤT THEO KHO:
+- Kho DN01: Tổng xuất = 151,963 | Trung bình = 20.82 sp/cặp/ngày | Tỷ lệ ngày 0 xuất = 42.6%
+- Kho HCM01: Tổng xuất = 150,763 | Trung bình = 20.65 sp/cặp/ngày | Tỷ lệ ngày 0 xuất = 43.1%
+- Kho HN01: Tổng xuất = 150,823 | Trung bình = 20.66 sp/cặp/ngày | Tỷ lệ ngày 0 xuất = 43.1%
+  (Nhận xét: Sản lượng xuất chia rất đồng đều giữa 3 miền: DN ~33.5%, HCM ~33.3%, HN ~33.2%).
+
+3. LƯỢNG XUẤT THEO THỨ TRONG TUẦN & CUỐI TUẦN:
+- Thứ Hai   : Trung bình xuất = 20.52 sp/cặp/ngày (Tổng: 64,026)
+- Thứ Ba    : Trung bình xuất = 21.34 sp/cặp/ngày (Tổng: 67,854)
+- Thứ Tư    : Trung bình xuất = 20.06 sp/cặp/ngày (Tổng: 62,580)
+- Thứ Năm   : Trung bình xuất = 20.99 sp/cặp/ngày (Tổng: 65,489)
+- Thứ Sáu   : Trung bình xuất = 20.89 sp/cặp/ngày (Tổng: 65,183)
+- Thứ Bảy   : Trung bình xuất = 20.52 sp/cặp/ngày (Tổng: 64,022)
+- Chủ Nhật  : Trung bình xuất = 20.64 sp/cặp/ngày (Tổng: 64,395)
+- Cuối tuần                : Trung bình xuất = 20.58 sp/cặp/ngày
+- Ngày thường trong tuần   : Trung bình xuất = 20.76 sp/cặp/ngày
+  (Nhận xét: Không có sự chênh lệch đột biến giữa ngày thường và cuối tuần, phản ánh tính chất kho B2B/phân phối hoạt động xuyên suốt).
+
+4. LƯỢNG XUẤT THEO NGÀY NGHỈ LỄ:
+- Ngày bình thường    : Trung bình xuất = 20.70 sp/cặp/ngày (Tổng: 435,942)
+- Ngày lễ             : Trung bình xuất = 20.96 sp/cặp/ngày (Tổng: 17,607)
+  (Nhận xét: Mức xuất trong các ngày nghỉ lễ vẫn duy trì, không giảm sâu về 0).
+
+5. MỐI LIÊN HỆ VỚI THỜI TIẾT (HỆ SỐ TƯƠNG QUAN PEARSON):
+- Hệ số tương quan giữa Nhu cầu xuất và Nhiệt độ trung bình: r = +0.0012
+- Hệ số tương quan giữa Nhu cầu xuất và Lượng mưa ngày:       r = -0.0016
+  (Nhận xét khoa học: Hệ số tương quan r xấp xỉ 0 cho thấy trong dữ liệu hiện tại,
+   nhiệt độ và lượng mưa KHÔNG có tương quan tuyến tính mạnh với lượng xuất hàng.
+   Lưu ý: Không thể kết luận quan hệ nhân quả chỉ dựa trên tương quan).
+
+6. TOP 5 SẢN PHẨM XUẤT NHIỀU NHẤT VÀ ÍT NHẤT:
+- Top 5 xuất nhiều nhất:
+  + SP013: 73,054 sp (TB: 66.72 sp/ngày/kho)
+  + SP012: 70,030 sp (TB: 63.95 sp/ngày/kho)
+  + SP006: 66,046 sp (TB: 60.32 sp/ngày/kho)
+  + SP004: 64,330 sp (TB: 58.75 sp/ngày/kho)
+  + SP005: 53,951 sp (TB: 49.27 sp/ngày/kho)
+- Top 5 xuất ít nhất:
+  + SP002: 1,300 sp (TB: 1.19 sp/ngày/kho)
+  + SP003: 1,174 sp (TB: 1.07 sp/ngày/kho)
+  + SP018: 557 sp (TB: 0.51 sp/ngày/kho)
+  + SP019: 274 sp (TB: 0.25 sp/ngày/kho)
+  + SP020: 210 sp (TB: 0.19 sp/ngày/kho)

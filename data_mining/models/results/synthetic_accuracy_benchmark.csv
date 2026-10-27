@@ -1,0 +1,4 @@
+﻿scenario,data_kind,test_rows,test_start,test_end,wape_percent,accuracy_100_minus_wape_percent,meets_90_percent_target,noise_sigma,zero_probability,outlier_probability
+real_holdout_current_model,real_project_holdout,2940,,,89.75163517030667,10.24836482969333,False,,,
+current_like_synthetic,synthetic_only,4320,2026-07-09,2026-09-18,29.11977439667594,70.88022560332406,False,0.18,0.1,0.02
+controlled_low_noise,synthetic_only,4320,2026-07-09,2026-09-18,7.47423459251059,92.52576540748942,True,0.05,0.01,0.0

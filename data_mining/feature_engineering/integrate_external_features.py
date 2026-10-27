@@ -3,6 +3,7 @@ from pathlib import Path
 
 import pandas as pd
 
+
 ROOT = Path(r"D:\WarehouseManagement")
 EXTERNAL = ROOT / "data_mining" / "datasets" / "external"
 GOLD = ROOT / "data_mining" / "datasets" / "gold"
@@ -14,22 +15,6 @@ ECONOMIC_FILE = EXTERNAL / "vietnam_economic_yearly.csv"
 
 OUTPUT_FILE = GOLD / "nhu_cau_xuat_hang_with_external.csv"
 REPORT_FILE = GOLD / "external_integration_report.csv"
-
-
-def normalize_warehouse(value):
-    if pd.isna(value):
-        return None
-
-    value = str(value).strip().upper()
-
-    if value.startswith("HCM") or value.startswith("HC"):
-        return "HCM"
-    if value.startswith("HN"):
-        return "HN"
-    if value.startswith("DN") or value.startswith("ĐN"):
-        return "DN"
-
-    return None
 
 
 def read_csv_checked(path):
@@ -47,22 +32,50 @@ def normalize_date(df, column):
     return df
 
 
-def add_report(report_rows, df, column, source):
-    if column not in df.columns:
-        return
+def normalize_warehouse(value):
+    if pd.isna(value):
+        return None
 
-    missing = int(df[column].isna().sum())
-    total = len(df)
+    value = str(value).strip().upper()
 
-    report_rows.append({
-        "source": source,
-        "column_name": column,
-        "total_rows": total,
-        "missing_count": missing,
-        "missing_pct": round(
-            missing / total * 100, 2
-        ) if total else 0,
-    })
+    if value.startswith(("HCM", "HC")):
+        return "HCM"
+
+    if value.startswith("HN"):
+        return "HN"
+
+    if value.startswith(("DN", "ĐN")):
+        return "DN"
+
+    return None
+
+
+def add_report(report_rows, df, columns, source):
+    for column in columns:
+        if column not in df.columns:
+            report_rows.append({
+                "source": source,
+                "column_name": column,
+                "total_rows": len(df),
+                "missing_count": len(df),
+                "missing_pct": 100.0 if len(df) else 0.0,
+                "note": "Cột không tồn tại",
+            })
+            continue
+
+        missing = int(df[column].isna().sum())
+        total = len(df)
+
+        report_rows.append({
+            "source": source,
+            "column_name": column,
+            "total_rows": total,
+            "missing_count": missing,
+            "missing_pct": round(
+                missing / total * 100, 2
+            ) if total else 0.0,
+            "note": "",
+        })
 
 
 def main():
@@ -74,11 +87,15 @@ def main():
     original_rows = len(demand)
 
     required_demand = [
-        "ngay", "ma_kho", "ma_sp", "nhu_cau_xuat"
+        "ngay",
+        "ma_kho",
+        "ma_sp",
+        "nhu_cau_xuat",
     ]
 
     missing_columns = [
-        c for c in required_demand if c not in demand.columns
+        column for column in required_demand
+        if column not in demand.columns
     ]
 
     if missing_columns:
@@ -86,9 +103,9 @@ def main():
             f"Thiếu cột trong dữ liệu nhu cầu: {missing_columns}"
         )
 
-    # --------------------------------------------------
+    demand = demand.copy()
+
     # 1. Chuẩn hóa ngày
-    # --------------------------------------------------
     demand = normalize_date(demand, "ngay")
     weather = normalize_date(weather, "date")
     calendar = normalize_date(calendar, "date")
@@ -97,45 +114,63 @@ def main():
     weather = weather.dropna(subset=["date"]).copy()
     calendar = calendar.dropna(subset=["date"]).copy()
 
-    # --------------------------------------------------
-    # 2. Chuẩn hóa mã khu vực kho và ghép thời tiết
-    # --------------------------------------------------
+    if demand.empty:
+        raise ValueError("Dữ liệu nhu cầu không có ngày hợp lệ.")
+
+    # 2. Chuẩn hóa mã khu vực và ghép thời tiết
+    if "warehouse_code" not in weather.columns:
+        raise ValueError(
+            "weather_daily.csv không có cột warehouse_code."
+        )
+
     demand["_weather_location"] = (
         demand["ma_kho"].map(normalize_warehouse)
     )
-
-    if "warehouse_code" not in weather.columns:
-        raise ValueError(
-            "weather_daily.csv không có cột warehouse_code"
-        )
 
     weather["_weather_location"] = (
         weather["warehouse_code"].map(normalize_warehouse)
     )
 
-    weather_columns = [
-        "date",
-        "_weather_location",
+    weather_value_columns = [
         "weather_code",
         "temp_max",
         "temp_min",
-        "rain_probability_max",
-        "temp_hourly_mean",
-        "rain_probability_hourly_mean",
+        "temp_mean",
+        "precipitation_sum",
+        "precipitation_hours",
+        "wind_speed_max",
     ]
 
-    weather_columns = [
-        c for c in weather_columns if c in weather.columns
+    missing_weather_columns = [
+        column for column in weather_value_columns
+        if column not in weather.columns
     ]
 
-    weather = weather[weather_columns].copy()
+    if missing_weather_columns:
+        raise ValueError(
+            "Thiếu cột thời tiết: "
+            f"{missing_weather_columns}. "
+            "Hãy kiểm tra weather_daily.csv."
+        )
 
-    # Nếu có nhiều dòng cùng ngày/khu vực, không cho phép
-    # merge làm nhân bản dữ liệu nhu cầu.
-    weather = weather.drop_duplicates(
-        subset=["date", "_weather_location"],
-        keep="last",
+    weather = weather[
+        ["date", "_weather_location"] + weather_value_columns
+    ].copy()
+
+    weather = weather.dropna(
+        subset=["date", "_weather_location"]
     )
+
+    weather_duplicates = weather.duplicated(
+        subset=["date", "_weather_location"],
+        keep=False,
+    )
+
+    if weather_duplicates.any():
+        raise ValueError(
+            "weather_daily.csv có nhiều dòng cùng ngày và khu vực kho. "
+            "Hãy kiểm tra dữ liệu trước khi ghép."
+        )
 
     weather = weather.rename(
         columns={"date": "_weather_date"}
@@ -154,11 +189,8 @@ def main():
         errors="ignore",
     )
 
-    # --------------------------------------------------
-    # 3. Ghép lịch ngày lễ theo ngày
-    # --------------------------------------------------
+    # 3. Ghép lịch ngày lễ
     calendar_columns = [
-        "date",
         "day_of_week",
         "day_of_week_num",
         "is_weekend",
@@ -170,22 +202,35 @@ def main():
         "holiday_verification_status",
     ]
 
-    calendar_columns = [
-        c for c in calendar_columns if c in calendar.columns
+    missing_calendar_columns = [
+        column for column in calendar_columns
+        if column not in calendar.columns
     ]
 
-    calendar = calendar[calendar_columns].copy()
+    if missing_calendar_columns:
+        print(
+            "Cảnh báo: thiếu các cột lịch: "
+            f"{missing_calendar_columns}"
+        )
 
-    calendar = calendar.drop_duplicates(
-        subset=["date"],
-        keep="last",
-    )
+    calendar_value_columns = [
+        column for column in calendar_columns
+        if column in calendar.columns
+    ]
+
+    calendar = calendar[
+        ["date"] + calendar_value_columns
+    ].copy()
+
+    if calendar["date"].duplicated().any():
+        raise ValueError(
+            "vietnam_calendar_daily.csv có nhiều dòng cùng ngày."
+        )
 
     calendar = calendar.rename(
         columns={
-            c: f"calendar_{c}"
-            for c in calendar.columns
-            if c != "date"
+            column: f"calendar_{column}"
+            for column in calendar_value_columns
         }
     )
 
@@ -199,13 +244,13 @@ def main():
 
     demand = demand.drop(columns=["date"], errors="ignore")
 
-    # --------------------------------------------------
     # 4. Ghép dữ liệu kinh tế theo năm
-    # --------------------------------------------------
     if "year" not in economic.columns:
         raise ValueError(
-            "vietnam_economic_yearly.csv không có cột year"
+            "vietnam_economic_yearly.csv không có cột year."
         )
+
+    economic = economic.copy()
 
     economic["year"] = pd.to_numeric(
         economic["year"], errors="coerce"
@@ -213,9 +258,23 @@ def main():
 
     economic = economic.dropna(subset=["year"]).copy()
     economic["year"] = economic["year"].astype(int)
-    economic = economic.drop_duplicates(
-        subset=["year"], keep="last"
-    )
+
+    if economic["year"].duplicated().any():
+        raise ValueError(
+            "vietnam_economic_yearly.csv có nhiều dòng cùng năm."
+        )
+
+    economic_columns = [
+        "exchange_rate_vnd_per_usd",
+        "gdp_growth_pct",
+        "gdp_usd",
+        "inflation_pct",
+    ]
+
+    economic_columns = [
+        column for column in economic_columns
+        if column in economic.columns
+    ]
 
     economic = economic.rename(
         columns={"year": "economic_year"}
@@ -224,59 +283,33 @@ def main():
     demand["economic_year"] = demand["ngay"].dt.year.astype(int)
 
     demand = demand.merge(
-        economic,
+        economic[["economic_year"] + economic_columns],
         on="economic_year",
         how="left",
         validate="many_to_one",
-        suffixes=("", "_economic"),
     )
 
     demand = demand.drop(columns=["economic_year"])
 
-
-    # --------------------------------------------------
-    # 5. Kiểm tra số dòng và lưu kết quả
-    # --------------------------------------------------
-    if len(demand) != len(demand.drop_duplicates()):
-        print(
-            "CẢNH BÁO: Có dòng trùng hoàn toàn trong kết quả. "
-            "Không tự động xóa để tránh mất dữ liệu."
-        )
-
+    # 5. Kiểm tra số dòng trước khi lưu
     if len(demand) != original_rows:
         raise RuntimeError(
-            f"Số dòng đã thay đổi: "
-            f"{original_rows} -> {len(demand)}. "
-            "Dừng để tránh xuất dữ liệu sai."
+            f"Số dòng thay đổi từ {original_rows} "
+            f"thành {len(demand)}. Không lưu kết quả."
         )
 
-    GOLD.mkdir(parents=True, exist_ok=True)
-
-    demand.to_csv(
-        OUTPUT_FILE,
-        index=False,
-        encoding="utf-8-sig",
-    )
-
-    # --------------------------------------------------
-    # 6. Báo cáo chất lượng dữ liệu
-    # --------------------------------------------------
+    # 6. Báo cáo thiếu dữ liệu
     report_rows = []
 
-    weather_check = [
-        "weather_code",
-        "temp_max",
-        "temp_min",
-        "rain_probability_max",
-        "temp_hourly_mean",
-        "rain_probability_hourly_mean",
-    ]
+    weather_check = weather_value_columns
 
     calendar_check = [
         "calendar_is_weekend",
         "calendar_is_public_holiday",
         "calendar_is_day_off",
+        "calendar_is_compensatory",
         "calendar_is_makeup_workday",
+        "calendar_holiday_verification_status",
     ]
 
     economic_check = [
@@ -286,16 +319,28 @@ def main():
         "exchange_rate_vnd_per_usd",
     ]
 
-    for column in weather_check:
-        add_report(report_rows, demand, column, "Weather")
+    add_report(
+        report_rows, demand, weather_check, "Weather"
+    )
 
-    for column in calendar_check:
-        add_report(report_rows, demand, column, "Holiday")
+    add_report(
+        report_rows, demand, calendar_check, "Holiday"
+    )
 
-    for column in economic_check:
-        add_report(report_rows, demand, column, "Economic")
+    add_report(
+        report_rows, demand, economic_check, "Economic"
+    )
 
     report = pd.DataFrame(report_rows)
+
+    # 7. Lưu kết quả
+    GOLD.mkdir(parents=True, exist_ok=True)
+
+    demand.to_csv(
+        OUTPUT_FILE,
+        index=False,
+        encoding="utf-8-sig",
+    )
 
     report.to_csv(
         REPORT_FILE,
@@ -303,9 +348,10 @@ def main():
         encoding="utf-8-sig",
     )
 
-    print("\n===== TÍCH HỢP API HOÀN TẤT =====")
-    print(f"Dòng nhu cầu đầu vào: {original_rows}")
-    print(f"Dòng dữ liệu đầu ra: {len(demand)}")
+    # 8. In kết quả kiểm tra
+    print("\n===== TÍCH HỢP DỮ LIỆU HOÀN TẤT =====")
+    print(f"Số dòng đầu vào: {original_rows}")
+    print(f"Số dòng đầu ra: {len(demand)}")
     print(f"Số cột đầu ra: {len(demand.columns)}")
     print(f"File Gold: {OUTPUT_FILE}")
     print(f"Báo cáo chất lượng: {REPORT_FILE}")
@@ -313,13 +359,41 @@ def main():
     print("\n===== BÁO CÁO THIẾU DỮ LIỆU =====")
     print(report.to_string(index=False))
 
-    print("\n===== KIỂM TRA TỶ GIÁ THEO NĂM =====")
+    print("\n===== KIỂM TRA THỜI TIẾT THEO NĂM =====")
+    weather_summary_columns = [
+        column for column in weather_value_columns
+        if column in demand.columns
+    ]
+
+    print(
+        demand.groupby(demand["ngay"].dt.year)[
+            weather_summary_columns
+        ].agg(["count", "min", "max"]).to_string()
+    )
+
+    print("\n===== KIỂM TRA KINH TẾ THEO NĂM =====")
     if "exchange_rate_vnd_per_usd" in demand.columns:
+        economic_summary_columns = [
+            column for column in economic_check
+            if column in demand.columns
+        ]
+
         print(
             demand.groupby(demand["ngay"].dt.year)[
-                "exchange_rate_vnd_per_usd"
+                economic_summary_columns
             ].agg(["count", "min", "max"]).to_string()
         )
+
+    print("\n===== KIỂM TRA KHOẢNG NGÀY =====")
+    print(f"Từ ngày: {demand['ngay'].min().date()}")
+    print(f"Đến ngày: {demand['ngay'].max().date()}")
+
+    print("\n===== KIỂM TRA KHU VỰC KHO =====")
+    print(
+        demand["ma_kho"].map(normalize_warehouse)
+        .value_counts(dropna=False)
+        .to_string()
+    )
 
 
 if __name__ == "__main__":
