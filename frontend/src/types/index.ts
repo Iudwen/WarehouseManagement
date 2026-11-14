@@ -194,6 +194,7 @@ export interface DataMiningSummaryData {
     baseline: { mae: number; rmse: number };
     ridge: { mae: number; rmse: number };
     randomForest: { mae: number; rmse: number };
+    lightgbm?: { mae: number; rmse: number };
     bestModel: string;
     improvementOverBaselinePct: number;
   };
@@ -358,6 +359,8 @@ export interface MarketBasketRule {
   transaction_count: number;
   picking_suggestion: string;
   kho_ap_dung: string;
+  antecedent_count?: number;
+  consequent_count?: number;
 }
 
 export interface TopPickingPair {
@@ -379,7 +382,8 @@ export interface MarketBasketData {
   tham_so_apriori: {
     min_support: number;
     min_confidence: number;
-    min_lift: number;
+    min_lift?: number;
+    min_count?: number;
   };
   ghi_chu_picking: string;
   top_picking_pairs: TopPickingPair[];
@@ -414,4 +418,241 @@ export interface TransferRecommendationData {
   phan_bo_muc_do: Record<string, number>;
   ghi_chu_nghiep_vu: string;
   items: TransferRecommendationItem[];
+}
+
+export interface DataLakeQualityReport {
+  table_name: string;
+  source_rows: number;
+  silver_rows: number;
+  rejected_rows: number;
+  duplicate_rows_detected: number;
+  null_primary_keys_detected: number;
+  status: 'PASSED' | 'FAILED';
+  rules_applied: string[];
+  execution_timestamp?: string;
+  file_size_kb?: number;
+}
+
+export interface DataLakeMedallionInfo {
+  medallion: {
+    bronze: {
+      postgres_tables: number;
+      mongodb_collections: number;
+      description: string;
+      sample_tables: string[];
+    };
+    silver: {
+      total_reports: number;
+      passed_reports: number;
+      failed_reports: number;
+      quality_rate: number;
+      total_source_rows: number;
+      total_silver_rows: number;
+      description: string;
+      reports: DataLakeQualityReport[];
+    };
+    gold: {
+      delta_table: {
+        name: string;
+        engine: string;
+        format: string;
+        current_version: number;
+        total_commits: number;
+        total_rows: number;
+        total_quantity: number;
+        time_travel_supported: boolean;
+        columns: string[];
+      };
+      analytical_dataset: {
+        rows: number;
+        columns: number;
+        features: string[];
+      };
+      description: string;
+    };
+  };
+  pipeline_status?: {
+    last_run?: string;
+    total_duration_sec?: number;
+    status?: string;
+    steps?: Array<{ step: string | number; name: string; status: string; duration_seconds?: number; duration_sec?: number }>;
+  };
+  model_registry?: any;
+}
+
+
+// ==========================================================
+// SYSTEM MONITORING TYPES (GIAI ĐOẠN 4)
+// ==========================================================
+
+export interface SystemHealthData {
+  status: 'HEALTHY' | 'DEGRADED' | 'UNHEALTHY';
+  statusText: string;
+  timestamp: string;
+  uptimeSeconds: number;
+  nodesSummary: {
+    total: number;
+    online: number;
+    degraded: number;
+    offline: number;
+  };
+  infrastructure: {
+    postgresHN: 'ONLINE' | 'OFFLINE';
+    postgresDN: 'ONLINE' | 'OFFLINE';
+    postgresHCM: 'ONLINE' | 'OFFLINE';
+    postgresCentral: 'ONLINE' | 'OFFLINE';
+    mongoDb: 'ONLINE' | 'OFFLINE';
+    kafkaBroker: 'ONLINE' | 'OFFLINE';
+    outboxWorker: 'ACTIVE' | 'IDLE' | 'STOPPED';
+  };
+}
+
+export interface NodeStatusData {
+  nodeId: 'HN' | 'DN' | 'HCM' | 'CENTRAL';
+  name: string;
+  type: 'WAREHOUSE_NODE' | 'CENTRAL_DATA_CENTER';
+  status: 'ONLINE' | 'DEGRADED' | 'OFFLINE';
+  statusSource: 'inferred_from_services';
+  statusText: string;
+  latencyMs: number;
+  lastChecked: string;
+  postgres: {
+    status: 'CONNECTED' | 'ERROR' | 'UNREACHABLE';
+    latencyMs: number;
+    database: string;
+    error?: string;
+  };
+  outbox?: {
+    pending: number;
+    processing: number;
+    failed: number;
+    processed: number;
+    lastProcessedAt: string | null;
+  };
+  details?: Record<string, any>;
+}
+
+export interface SystemMetricsData {
+  timestamp: string;
+  databaseMetrics: Record<string, {
+    status: 'ONLINE' | 'OFFLINE';
+    latencyMs: number;
+    error?: string;
+  }>;
+  mongoMetrics: {
+    status: 'ONLINE' | 'OFFLINE';
+    latencyMs: number;
+    readyState: number;
+    error?: string;
+  };
+  kafkaMetrics: {
+    status: 'ONLINE' | 'OFFLINE';
+    latencyMs: number;
+    clusterId?: string;
+    brokerCount?: number;
+    topics?: string[];
+    hasBusinessTopics?: boolean;
+    error?: string;
+  };
+  outboxWorkerMetrics: {
+    workerStatus: 'ACTIVE' | 'IDLE' | 'STOPPED';
+    lastHeartbeat: string | null;
+    heartbeatNodes: Array<{ node: string; lastPollAt: string; status: string }>;
+  };
+  outboxBacklogMetrics: {
+    totalPending: number;
+    totalProcessing: number;
+    totalFailed: number;
+    totalProcessed: number;
+    nodes: Record<string, {
+      pending: number;
+      processing: number;
+      failed: number;
+      processed: number;
+      lastProcessedAt: string | null;
+    }>;
+  };
+}
+
+// -------------------------------------------------------------
+// GIAI ĐOẠN 5: BACKUP & RECOVERY TYPES (TASK 5.7)
+// -------------------------------------------------------------
+
+export interface BackupRecord {
+  backupId: string;
+  sessionId?: string;
+  backupType: 'POSTGRES' | 'MONGODB';
+  database: string;
+  nodeId: 'HN' | 'DN' | 'HCM' | 'CENTRAL' | 'MONGO';
+  fileName: string;
+  originalPath: string;
+  createdAt: string;
+  sizeBytes: number;
+  sizeFormatted: string;
+  checksumSHA256: string;
+  status: 'SUCCESS' | 'FAILED';
+  validated: boolean;
+  tocOrCollectionsCount?: number;
+  replicaStatus: 'SUCCESS' | 'FAILED' | 'SKIPPED';
+  replicaPath?: string;
+  replicaChecksumSHA256?: string;
+  replicaErrorMessage?: string;
+  errorMessage?: string;
+  durationMs: number;
+}
+
+export interface BackupStats {
+  total: number;
+  successCount: number;
+  failedCount: number;
+  replicaSuccessCount: number;
+  lastBackupTime: string | null;
+}
+
+export interface BackupSchedulerStatus {
+  isScheduled: boolean;
+  config: {
+    enabled: boolean;
+    scheduleTime: string;
+    timezone: string;
+    checkIntervalMs: number;
+  };
+  lastRunDate?: string;
+  nextScheduledTime?: string;
+  currentTimeInTz: {
+    time: string;
+    date: string;
+  };
+}
+
+export interface BackupHistoryResponse {
+  success: boolean;
+  stats: BackupStats;
+  scheduler: BackupSchedulerStatus;
+  history: BackupRecord[];
+}
+
+export interface RestorePostgresPayload {
+  backupFilePath: string;
+  targetDatabase: string;
+  targetNodeId: 'HN' | 'DN' | 'HCM' | 'CENTRAL';
+  createDbIfNotExists?: boolean;
+}
+
+export interface RestoreMongoPayload {
+  backupFilePath: string;
+  targetDatabase: string;
+}
+
+export interface RestoreResultData {
+  success: boolean;
+  targetDatabase: string;
+  backupFilePath: string;
+  durationMs: number;
+  tablesRestoredCount?: number;
+  collectionsRestoredCount?: number;
+  documentsRestoredCount?: number;
+  tables?: string[];
+  collections?: string[];
+  errorMessage?: string;
 }

@@ -14,7 +14,8 @@
     "test:mining": "node tests/test_data_mining_service.js",
     "test:relay": "node tests/test_relay_without_created_after.js",
     "test:pipeline": "node tests/test_outbox_pipeline_verification.js",
-    "test:unit": "node tests/test_unit_source_confirm.js"
+    "test:unit": "node tests/test_unit_source_confirm.js",
+    "test:kafka": "ts-node tests/test_kafka_suite.ts"
   },
   "dependencies": {
     "bcrypt": "^6.0.0",
@@ -23,6 +24,7 @@
     "dotenv": "^16.4.5",
     "express": "^4.19.2",
     "jsonwebtoken": "^9.0.2",
+    "kafkajs": "^2.2.4",
     "mongoose": "^8.5.0",
     "pg": "^8.12.0",
     "swagger-ui-express": "^5.0.1",

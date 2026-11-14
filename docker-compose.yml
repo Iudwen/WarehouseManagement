@@ -301,6 +301,7 @@ services:
       POSTGRES_DB_CENTRAL: ${POSTGRES_DB_CENTRAL}
       OUTBOX_ALL_NODES: "true"
       OUTBOX_POLL_INTERVAL: "3000"
+      KAFKA_BROKERS: "kafka:9092"
 
     depends_on:
       postgres_hn:
@@ -311,6 +312,72 @@ services:
         condition: service_healthy
       postgres_central:
         condition: service_healthy
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # NGINX REVERSE PROXY / API GATEWAY
+  # ==========================================================
+  nginx:
+    image: nginx:alpine
+    container_name: warehouse_nginx
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # APACHE KAFKA (KRAFT SINGLE BROKER)
+  # ==========================================================
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: warehouse_kafka
+    restart: unless-stopped
+
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_JVM_PERFORMANCE_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC"
+
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    volumes:
+      - kafka_data:/var/lib/kafka/data
 
     networks:
       - warehouse_network
@@ -336,6 +403,9 @@ volumes:
 
   mongodb_data:
     name: warehouse_mongodb_data
+
+  kafka_data:
+    name: warehouse_kafka_data
 
 
 # ==========================================================

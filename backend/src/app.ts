@@ -18,6 +18,10 @@ import masterDataRoutes from './routes/masterDataRoutes';
 import alertRoutes from './routes/alertRoutes';
 import auditRoutes from './routes/auditRoutes'; // Bổ sung Audit Route
 import dataMiningRoutes from './routes/dataMiningRoutes'; // Data Mining & Dự báo nhu cầu
+import monitoringRoutes from './routes/monitoringRoutes'; // API Giám sát Hệ thống Phân tán (Giai đoạn 4)
+import backupRoutes from './routes/backupRoutes'; // API Sao lưu & Phục hồi dữ liệu (Giai đoạn 5)
+import { getDefaultEventConsumer } from './kafka';
+import { backupScheduler } from './services/backupScheduler';
 
 const app: Application = express();
 
@@ -31,12 +35,19 @@ const swaggerPath = fs.existsSync(path.join(__dirname, 'docs/swagger.yaml'))
 const swaggerDocument = YAML.load(swaggerPath);
 app.use('/api-docs', swaggerUi.serve, swaggerUi.setup(swaggerDocument));
 
-// Kết nối Mongo Event Log
+// Kết nối Mongo Event Log & Khởi động Kafka Consumer
 const mongoUri =
   process.env.MONGO_URI ||
   'mongodb://127.0.0.1:27018/warehouse_events';
 mongoose.connect(mongoUri)
-  .then(() => console.log('🍃 MongoDB Event Logs Connected!'))
+  .then(async () => {
+    console.log('🍃 MongoDB Event Logs Connected!');
+    try {
+      await getDefaultEventConsumer().start();
+    } catch (kErr: any) {
+      console.warn('⚠️ [KAFKA] Consumer chưa kết nối được ngay:', kErr?.message || kErr);
+    }
+  })
   .catch((err) => console.error('❌ Lỗi kết nối MongoDB:', err));
 
 // Register System Routes (/api/v1 Prefix)
@@ -48,6 +59,8 @@ app.use('/api/v1/master-data', masterDataRoutes);
 app.use('/api/v1/alerts', alertRoutes);
 app.use('/api/v1/audit', auditRoutes); // Đăng ký route xem Log MongoDB
 app.use('/api/v1/data-mining', dataMiningRoutes); // API Data Mining & Dự báo nhu cầu xuất kho
+app.use('/api/v1/monitoring', monitoringRoutes); // Tuyến đường giám sát hệ thống phân tán (ADMIN only)
+app.use('/api/v1/backup', backupRoutes); // Tuyến đường sao lưu & phục hồi dữ liệu (ADMIN only)
 
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'OK', message: 'Warehouse TypeScript Backend Distributed Core Ready!' });
@@ -70,4 +83,7 @@ app.use((err: any, req: Request, res: Response, next: NextFunction) => {
 const PORT = process.env.PORT || 5000;
 app.listen(PORT, () => {
   console.log(`🚀 Warehouse Backend running on port ${PORT}`);
+  if (process.env.BACKUP_SCHEDULE_ENABLED !== 'false') {
+    backupScheduler.start();
+  }
 });

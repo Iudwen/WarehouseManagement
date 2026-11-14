@@ -25,8 +25,10 @@ BASE_DIR = Path(__file__).resolve().parents[2]
 INPUT_FILE = BASE_DIR / "data_mining" / "datasets" / "gold" / "analytical_dataset.csv"
 OUTPUT_DIR = BASE_DIR / "data_mining" / "datasets" / "gold"
 FORECAST_RESULTS_FILE = OUTPUT_DIR / "forecast_results.csv"
+EVALUATION_RESULTS_FILE = OUTPUT_DIR / "evaluation_results.csv"
 DATA_LAKE_FORECAST_FILE = BASE_DIR / "data_center" / "data_lake" / "gold" / "forecast_results.csv"
 EVALUATION_REPORT_FILE = BASE_DIR / "data_mining" / "evaluation_report.md"
+EVALUATION_REPORT_COPY_FILE = BASE_DIR / "data_mining" / "reports" / "evaluation_report.md"
 
 # Mốc phân chia Train / Test theo thời gian (chống rò rỉ thông tin tương lai)
 # Giai đoạn quan sát: 2025-09-18 -> 2026-09-18 (366 ngày)
@@ -35,6 +37,28 @@ EVALUATION_REPORT_FILE = BASE_DIR / "data_mining" / "evaluation_report.md"
 # Tập Test:  2026-08-01 đến 2026-09-18 (~1.5 tháng)
 TRAIN_END_DATE = "2026-07-31"
 TEST_START_DATE = "2026-08-01"
+
+
+def calculate_mape(y_true, y_pred):
+    """Tính MAPE trên các quan sát có giá trị thực tế dương.
+
+    MAPE không xác định khi y_true bằng 0, nên các quan sát đó được loại khỏi
+    mẫu số và số lượng mẫu được ghi nhận trong báo cáo đánh giá.
+    """
+    actual = np.asarray(y_true, dtype=float)
+    predicted = np.asarray(y_pred, dtype=float)
+    positive_actual = actual > 0
+    if not positive_actual.any():
+        return float("nan")
+    return float(
+        np.mean(
+            np.abs(
+                (actual[positive_actual] - predicted[positive_actual])
+                / actual[positive_actual]
+            )
+        )
+        * 100
+    )
 
 
 def build_features(df):
@@ -123,20 +147,24 @@ def main():
 
     # 1. BASELINE MODEL: Trung bình trượt 7 ngày gần nhất (rolling_mean_7)
     # Chuẩn so sánh tự nhiên nhất trong quản lý kho chuỗi thời gian
-    y_pred_baseline = test_data["rolling_mean_7"].values
+    y_pred_baseline = np.round(test_data["rolling_mean_7"].values, 2)
 
     mae_baseline = mean_absolute_error(y_test, y_pred_baseline)
     rmse_baseline = math.sqrt(mean_squared_error(y_test, y_pred_baseline))
+    mape_baseline = calculate_mape(y_test, y_pred_baseline)
 
     # 2. MODEL ML 1: Ridge Regression (Mô hình tuyến tính có điều chuẩn L2)
     print("\nĐang huấn luyện Model 1: Ridge Regression...")
     model_ridge = Ridge(alpha=1.0)
     model_ridge.fit(X_train, y_train)
     y_pred_ridge = model_ridge.predict(X_test)
-    y_pred_ridge = np.clip(y_pred_ridge, 0, None)  # Bảo đảm an toàn: nhu cầu xuất không thể âm
+    y_pred_ridge = np.round(
+        np.clip(y_pred_ridge, 0, None), 2
+    )  # Bảo đảm an toàn: nhu cầu xuất không thể âm
 
     mae_ridge = mean_absolute_error(y_test, y_pred_ridge)
     rmse_ridge = math.sqrt(mean_squared_error(y_test, y_pred_ridge))
+    mape_ridge = calculate_mape(y_test, y_pred_ridge)
 
     # 3. MODEL ML 2: Random Forest Regressor (Mô hình học máy phi tuyến, dễ giải thích)
     print("Đang huấn luyện Model 2: Random Forest Regressor (n_estimators=100)...")
@@ -148,10 +176,11 @@ def main():
     )
     model_rf.fit(X_train, y_train)
     y_pred_rf = model_rf.predict(X_test)
-    y_pred_rf = np.clip(y_pred_rf, 0, None)
+    y_pred_rf = np.round(np.clip(y_pred_rf, 0, None), 2)
 
     mae_rf = mean_absolute_error(y_test, y_pred_rf)
     rmse_rf = math.sqrt(mean_squared_error(y_test, y_pred_rf))
+    mape_rf = calculate_mape(y_test, y_pred_rf)
 
     # 4. MODEL ML 3: LightGBM Regressor (Gradient Boosting trên cây quyết định)
     print("Đang huấn luyện Model 3: LightGBM Regressor (n_estimators=100)...")
@@ -165,15 +194,16 @@ def main():
             verbose=-1
         )
         model_lgb.fit(X_train, y_train)
-        y_pred_lgb = np.clip(model_lgb.predict(X_test), 0, None)
+        y_pred_lgb = np.round(np.clip(model_lgb.predict(X_test), 0, None), 2)
     else:
         from sklearn.ensemble import HistGradientBoostingRegressor
         model_lgb = HistGradientBoostingRegressor(max_iter=100, max_depth=6, random_state=42)
         model_lgb.fit(X_train, y_train)
-        y_pred_lgb = np.clip(model_lgb.predict(X_test), 0, None)
+        y_pred_lgb = np.round(np.clip(model_lgb.predict(X_test), 0, None), 2)
 
     mae_lgb = mean_absolute_error(y_test, y_pred_lgb)
     rmse_lgb = math.sqrt(mean_squared_error(y_test, y_pred_lgb))
+    mape_lgb = calculate_mape(y_test, y_pred_lgb)
 
     # Lưu mô hình đã huấn luyện vào Model Registry
     MODEL_REGISTRY_DIR = BASE_DIR / "data_mining" / "models" / "model_registry"
@@ -187,16 +217,42 @@ def main():
     except Exception as e:
         print(f"[CẢNH BÁO] Không thể lưu model registry: {e}")
 
-    # Chọn mô hình tốt nhất dựa trên MAE tập Test
-    best_model_name = "Ridge Regression" if mae_ridge <= mae_rf else "Random Forest"
+    metric_values = {
+        "Baseline (Rolling Mean 7)": (mae_baseline, rmse_baseline, mape_baseline),
+        "Linear Ridge Regression": (mae_ridge, rmse_ridge, mape_ridge),
+        "Random Forest Regressor": (mae_rf, rmse_rf, mape_rf),
+        "LightGBM Regressor": (mae_lgb, rmse_lgb, mape_lgb),
+    }
+    best_model_name = min(
+        metric_values,
+        key=lambda name: (metric_values[name][0], metric_values[name][1]),
+    )
+    baseline_mae = metric_values["Baseline (Rolling Mean 7)"][0]
+    evaluation_df = pd.DataFrame(
+        [
+            {
+                "model": model_name,
+                "mae": metrics[0],
+                "rmse": metrics[1],
+                "mape_percent": metrics[2],
+                "mae_improvement_percent": (
+                    (baseline_mae - metrics[0]) / baseline_mae * 100
+                ),
+                "is_best": model_name == best_model_name,
+            }
+            for model_name, metrics in metric_values.items()
+        ]
+    )
 
     print("\n===== KẾT QUẢ ĐÁNH GIÁ TRÊN TẬP TEST (2026-08-01 -> 2026-09-18) =====")
-    print(f"{'Mô hình':30s} | {'MAE':10s} | {'RMSE':10s}")
-    print("-" * 56)
-    print(f"{'1. Baseline (Rolling Mean 7)':30s} | {mae_baseline:10.4f} | {rmse_baseline:10.4f}")
-    print(f"{'2. Linear Ridge Regression':30s} | {mae_ridge:10.4f} | {rmse_ridge:10.4f}")
-    print(f"{'3. Random Forest Regressor':30s} | {mae_rf:10.4f} | {rmse_rf:10.4f}")
-    print(f"{'4. LightGBM Regressor':30s} | {mae_lgb:10.4f} | {rmse_lgb:10.4f}")
+    print(f"{'Mô hình':30s} | {'MAE':10s} | {'RMSE':10s} | {'MAPE (%)':10s}")
+    print("-" * 72)
+    for _, row in evaluation_df.iterrows():
+        print(
+            f"{row['model']:30s} | {row['mae']:10.4f} | "
+            f"{row['rmse']:10.4f} | {row['mape_percent']:10.2f}"
+        )
+    print(f"=> Mô hình tốt nhất theo MAE/RMSE: {best_model_name}")
 
     # Xuất file kết quả dự báo
     results_df = pd.DataFrame({
@@ -213,6 +269,7 @@ def main():
 
     OUTPUT_DIR.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(FORECAST_RESULTS_FILE, index=False, encoding="utf-8-sig")
+    evaluation_df.to_csv(EVALUATION_RESULTS_FILE, index=False, encoding="utf-8-sig")
     DATA_LAKE_FORECAST_FILE.parent.mkdir(parents=True, exist_ok=True)
     results_df.to_csv(DATA_LAKE_FORECAST_FILE, index=False, encoding="utf-8-sig")
     print(f"\n[HOÀN TẤT] Đã lưu bảng kết quả dự báo ({len(results_df)} dòng) vào: {FORECAST_RESULTS_FILE}")
@@ -308,16 +365,27 @@ def main():
         "",
         "---",
         "",
-        "## 5. Bảng MAE/RMSE từ lần chạy thực tế mới nhất",
+        "## 5. Bảng MAE/RMSE/MAPE từ lần chạy thực tế mới nhất",
         "",
         "### 5.1. Đánh giá tổng thể trên toàn bộ tập Test (2,940 dòng)",
         "",
-        "| Mô hình | MAE (Sai số tuyệt đối TB) | RMSE (Căn bậc hai sai số bình phương TB) | Đánh giá so với Baseline |",
-        "| :--- | :---: | :---: | :---: |",
-        f"| **Baseline (Rolling Mean 7)** | **{mae_baseline:.4f}** | **{rmse_baseline:.4f}** | Chuẩn mực nghiệp vụ |",
-        f"| **Linear Ridge Regression** | **{mae_ridge:.4f}** | **{rmse_ridge:.4f}** | **Tốt nhất** (Giảm 5.28% MAE so với Baseline) |",
-        f"| **Random Forest Regressor** | **{mae_rf:.4f}** | **{rmse_rf:.4f}** | Giảm 5.04% MAE so với Baseline |",
-        f"| **LightGBM Regressor** | **{mae_lgb:.4f}** | **{rmse_lgb:.4f}** | Giảm 5.01% MAE so với Baseline |",
+        "| Mô hình | MAE | RMSE | MAPE (%) | Cải thiện MAE so với Baseline |",
+        "| :--- | :---: | :---: | :---: | :---: |",
+    ]
+    for _, row in evaluation_df.iterrows():
+        report_lines.append(
+            f"| **{row['model']}** | **{row['mae']:.4f}** | "
+            f"**{row['rmse']:.4f}** | **{row['mape_percent']:.2f}** | "
+            f"{row['mae_improvement_percent']:.2f}%"
+            f"{' — TỐT NHẤT' if row['is_best'] else ''} |"
+        )
+    report_lines.extend([
+        "",
+        "*MAPE chỉ tính trên các dòng có `thuc_te > 0` ({positive_count:,}/{total_count:,} dòng); "
+        "các dòng thực tế bằng 0 được đánh giá bằng MAE/RMSE.*".format(
+            positive_count=int((y_test > 0).sum()),
+            total_count=len(y_test),
+        ),
         "",
         "### 5.2. Đánh giá chi tiết theo từng kho",
         "",
@@ -337,10 +405,14 @@ def main():
         "---",
         "",
         "## 6. Mô hình được lựa chọn và căn cứ quyết định",
-        "* **Mô hình khuyến nghị triển khai chính (Primary):** **Linear Ridge Regression**.",
+        f"* **Mô hình khuyến nghị triển khai chính (Primary):** **{best_model_name}**.",
         "* **Mô hình thử nghiệm nâng cao (Alternative/Benchmark):** **LightGBM Regressor** & **Random Forest Regressor**.",
         "* **Các căn cứ khoa học & thực tiễn:**",
-        "  1. **Độ chính xác cao nhất:** Linear Ridge Regression đạt MAE nhỏ nhất (**13.9641**) và RMSE nhỏ nhất (**16.9765**) trên tập Test độc lập. LightGBM bám sát với MAE = **14.0044** (giảm 5.01% so với Baseline), chứng tỏ tính ổn định vượt trội so với quy tắc trượt.",
+        f"  1. **Độ chính xác cao nhất:** {best_model_name} đạt MAE thấp nhất "
+        f"(**{metric_values[best_model_name][0]:.4f}**) và RMSE "
+        f"(**{metric_values[best_model_name][1]:.4f}**) trên tập Test độc lập. "
+        f"MAPE của mô hình là **{metric_values[best_model_name][2]:.2f}%** "
+        "trên các quan sát có nhu cầu dương.",
         "  2. **Hiệu năng & Tài nguyên:** Thời gian huấn luyện Ridge < 0.1 giây, dung lượng model < 15 KB. LightGBM huấn luyện < 0.5 giây, dung lượng model < 200 KB. Cả hai đều vượt trội so với Random Forest (~4 giây, ~12 MB).",
         "  3. **Khả năng giải thích (Interpretability):** Trọng số của Ridge cho phép thủ kho hiểu rõ mức độ tác động của ngày trong tuần, ngày lễ và lượng xuất hôm trước đến kết quả dự báo.",
         "  4. **An toàn miền giá trị:** Tích hợp `np.clip(..., 0, None)`. Trên thực tế, 100% dự báo của các mô hình ML trên tập test đều tự nhiên >= 0.",
@@ -369,10 +441,13 @@ def main():
         "  ```powershell",
         "  py data_mining/models/train_forecast.py",
         "  ```"
-    ]
+    ])
     report_content = "\n".join(report_lines)
 
     with EVALUATION_REPORT_FILE.open("w", encoding="utf-8") as f:
+        f.write(report_content)
+    EVALUATION_REPORT_COPY_FILE.parent.mkdir(parents=True, exist_ok=True)
+    with EVALUATION_REPORT_COPY_FILE.open("w", encoding="utf-8") as f:
         f.write(report_content)
     print(f"[HOÀN TẤT] Đã lưu báo cáo đánh giá vào: {EVALUATION_REPORT_FILE}")
 

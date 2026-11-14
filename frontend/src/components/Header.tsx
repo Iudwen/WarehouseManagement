@@ -57,6 +57,7 @@ export default function Header() {
               onChange={(e) => setSelectedWarehouse(e.target.value)}
               className="bg-blue-50 font-bold text-blue-700 text-xs px-3 py-1.5 rounded-lg border border-blue-200 focus:outline-blue-500 cursor-pointer hover:bg-blue-100 transition-all"
             >
+              <option value="ALL">Toàn quốc (Tất cả chi nhánh)</option>
               <option value="HN01">Kho Hà Nội (HN01)</option>
               <option value="DN01">Kho Đà Nẵng (DN01)</option>
               <option value="HCM01">Kho TP.HCM (HCM01)</option>

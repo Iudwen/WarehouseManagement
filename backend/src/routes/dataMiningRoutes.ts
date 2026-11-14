@@ -6,6 +6,8 @@ import {
   handleGetAbcXyzAnalysis,
   handleGetMarketBasketRules,
   handleGetTransferRecommendations,
+  handleRecalculateDss,
+  handleGetDataLakeInfo,
 } from '../controllers/dataMiningController';
 import { auth } from '../middlewares/auth';
 import { dbSelector } from '../middlewares/dbSelector';
@@ -15,6 +17,9 @@ const router = Router();
 // Toàn bộ API Data Mining yêu cầu xác thực JWT và ngữ cảnh kho
 router.use(auth);
 router.use(dbSelector);
+
+// 0. Thông tin kiến trúc Data Lakehouse (Bronze, Silver Quality Reports, Gold Delta Table)
+router.get('/data-lake', handleGetDataLakeInfo);
 
 // 1. Chỉ số tổng hợp hiệu năng mô hình (Baseline, Ridge, Random Forest, LightGBM) & phân khúc
 router.get('/summary', handleGetDataMiningSummary);
@@ -33,5 +38,6 @@ router.get('/market-basket', handleGetMarketBasketRules);
 
 // 6. Đề xuất điều chuyển hàng liên kho hỗ trợ quyết định (DSS)
 router.get('/transfer-recommendations', handleGetTransferRecommendations);
+router.post('/recalculate-dss', handleRecalculateDss);
 
 export default router;

@@ -283,12 +283,13 @@ export interface ImportReceiptListItem {
 export const getImportReceiptsList = async (
   client: PoolClient,
   maKho?: string,
-  trangThai?: string
+  trangThai?: string,
+  limit: number = 300
 ): Promise<ImportReceiptListItem[]> => {
   const params: any[] = [];
   const whereClauses: string[] = [];
 
-  if (maKho && maKho !== 'CENTRAL') {
+  if (maKho && maKho.toUpperCase() !== 'CENTRAL' && maKho.toUpperCase() !== 'ALL') {
     params.push(maKho);
     whereClauses.push(`pn.ma_kho = $${params.length}`);
   }
@@ -299,6 +300,9 @@ export const getImportReceiptsList = async (
   }
 
   const whereSql = whereClauses.length > 0 ? `WHERE ${whereClauses.join(' AND ')}` : '';
+
+  params.push(limit);
+  const limitSql = `LIMIT $${params.length}`;
 
   const sql = `
     SELECT
@@ -329,6 +333,7 @@ export const getImportReceiptsList = async (
     ${whereSql}
     GROUP BY pn.ma_phieu_nhap, pn.ma_kho, pn.ma_ncc, ncc.ten_ncc, pn.ngay_nhap, pn.trang_thai
     ORDER BY pn.ngay_nhap DESC
+    ${limitSql}
   `;
 
   const result = await client.query(sql, params);

@@ -36,7 +36,7 @@ Nguồn dữ liệu: analytical_dataset.csv (Xuất kho + Thời tiết Open-Met
 
 5. MỐI LIÊN HỆ VỚI THỜI TIẾT (HỆ SỐ TƯƠNG QUAN PEARSON):
 - Hệ số tương quan giữa Nhu cầu xuất và Nhiệt độ trung bình: r = -0.0041
-- Hệ số tương quan giữa Nhu cầu xuất và Lượng mưa ngày:       r = -0.0004
+- Hệ số tương quan giữa Nhu cầu xuất và Lượng mưa ngày:       r = -0.0008
   (Nhận xét khoa học: Hệ số tương quan r xấp xỉ 0 cho thấy trong dữ liệu hiện tại,
    nhiệt độ và lượng mưa KHÔNG có tương quan tuyến tính mạnh với lượng xuất hàng.
    Lưu ý: Không thể kết luận quan hệ nhân quả chỉ dựa trên tương quan).

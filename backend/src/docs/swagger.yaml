@@ -4,8 +4,8 @@ info:
   description: API tài liệu Swagger cho hệ thống Warehouse Management với PostgreSQL phân tán (HN, DN, HCM, Central) và MongoDB Audit Logs.
   version: 1.0.0
 servers:
-  - url: http://localhost:5000/api/v1
-    description: Local Development Server
+  - url: /api/v1
+    description: Current Host Server (Nginx Reverse Proxy / Local Development)
 
 components:
   securitySchemes:
@@ -739,3 +739,51 @@ paths:
       responses:
         200:
           description: Danh sách log sự kiện
+
+  /monitoring/health:
+    get:
+      tags:
+        - Giám Sát Hệ Thống (Monitoring)
+      summary: Lấy tổng quan trạng thái sức khỏe toàn bộ hệ thống phân tán
+      description: Yêu cầu quyền ADMIN. Trả về trạng thái tổng thể, số lượng node Online/Degraded/Offline và trạng thái hạ tầng.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Tổng quan sức khỏe hệ thống
+        401:
+          description: Chưa đăng nhập
+        403:
+          description: Không có quyền truy cập (Chỉ dành cho ADMIN)
+
+  /monitoring/nodes:
+    get:
+      tags:
+        - Giám Sát Hệ Thống (Monitoring)
+      summary: Lấy trạng thái chi tiết của 3 Warehouse Node (HN, DN, HCM) và Central Data Center
+      description: Yêu cầu quyền ADMIN. Trả về trạng thái Online/Degraded/Offline, kết nối database, độ trễ và số lượng sự kiện Outbox.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Trạng thái chi tiết các node
+        401:
+          description: Chưa đăng nhập
+        403:
+          description: Không có quyền truy cập
+
+  /monitoring/metrics:
+    get:
+      tags:
+        - Giám Sát Hệ Thống (Monitoring)
+      summary: Lấy các chỉ số đo lường chi tiết (Latency, MongoDB, Kafka, Outbox Backlog)
+      description: Yêu cầu quyền ADMIN. Trả về thông số đo lường hệ thống phân tán.
+      security:
+        - BearerAuth: []
+      responses:
+        200:
+          description: Chi tiết các metrics hệ thống
+        401:
+          description: Chưa đăng nhập
+        403:
+          description: Không có quyền truy cập

@@ -119,14 +119,26 @@ def run_pipeline():
     print("Các dữ liệu đầu ra chính:")
     print("  1. Analytical Dataset:        data_mining/datasets/gold/analytical_dataset.csv (21,960 dòng)")
     print("  2. Kết quả dự báo (ML):       data_mining/datasets/gold/forecast_results.csv (2,940 dòng)")
-    print("  3. Báo cáo đánh giá ML:       data_mining/evaluation_report.md (Ridge, RF, LightGBM)")
-    print("  4. Phân tích ABC-XYZ:         data_mining/datasets/gold/abc_xyz_analysis.json (20 mặt hàng)")
-    print("  5. Phân tích giỏ hàng:        data_mining/datasets/gold/market_basket_rules.json (378 luật)")
-    print("  6. Đề xuất điều chuyển kho:   data_mining/datasets/gold/transfer_recommendations.json")
+    print("  3. Chỉ số đánh giá ML:        data_mining/datasets/gold/evaluation_results.csv")
+    print("  4. Báo cáo đánh giá ML:       data_mining/evaluation_report.md (Ridge, RF, LightGBM)")
+    print("  5. Phân tích ABC-XYZ:         data_mining/datasets/gold/abc_xyz_analysis.json (20 mặt hàng)")
+    print("  6. Phân tích giỏ hàng:        data_mining/datasets/gold/market_basket_rules.json (378 luật)")
+    print("  7. Đề xuất điều chuyển kho:   data_mining/datasets/gold/transfer_recommendations.json")
     print("================================================================================")
 
     # Lưu trạng thái pipeline để backend API có thể truy xuất metadata
     status_file = BASE_DIR / "data_mining" / "datasets" / "gold" / "pipeline_run_status.json"
+    evaluation_file = BASE_DIR / "data_mining" / "datasets" / "gold" / "evaluation_results.csv"
+    evaluation_df = None
+    if evaluation_file.exists():
+        import pandas as pd
+
+        evaluation_df = pd.read_csv(evaluation_file)
+    best_row = (
+        evaluation_df.loc[evaluation_df["is_best"].astype(bool)].iloc[0]
+        if evaluation_df is not None and evaluation_df["is_best"].astype(bool).any()
+        else None
+    )
     status_data = {
         "status": "COMPLETED",
         "last_run": datetime.now().isoformat(),
@@ -135,9 +147,18 @@ def run_pipeline():
         "metrics": {
             "analytical_rows": 21960,
             "test_rows": 2940,
-            "best_model": "Linear Ridge Regression",
-            "best_mae": 13.9641,
-            "lightgbm_mae": 14.0044,
+            "best_model": best_row["model"] if best_row is not None else None,
+            "best_mae": float(best_row["mae"]) if best_row is not None else None,
+            "lightgbm_mae": (
+                float(
+                    evaluation_df.loc[
+                        evaluation_df["model"] == "LightGBM Regressor", "mae"
+                    ].iloc[0]
+                )
+                if evaluation_df is not None
+                and (evaluation_df["model"] == "LightGBM Regressor").any()
+                else None
+            ),
             "abc_items": 20,
             "association_rules": 378,
             "transfer_recommendations": 2

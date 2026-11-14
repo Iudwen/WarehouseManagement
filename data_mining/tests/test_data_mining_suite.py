@@ -35,6 +35,7 @@ ANALYTICAL_FILE = BASE_DIR / "data_mining" / "datasets" / "gold" / "analytical_d
 EDA_REPORT_FILE = BASE_DIR / "data_mining" / "eda" / "eda_report.txt"
 EDA_CHART_FILE = BASE_DIR / "data_mining" / "eda" / "eda_charts.png"
 FORECAST_FILE = BASE_DIR / "data_mining" / "datasets" / "gold" / "forecast_results.csv"
+EVALUATION_FILE = BASE_DIR / "data_mining" / "datasets" / "gold" / "evaluation_results.csv"
 EVAL_REPORT_FILE = BASE_DIR / "data_mining" / "evaluation_report.md"
 RUN_PIPELINE_SCRIPT = BASE_DIR / "data_mining" / "run_pipeline.py"
 
@@ -74,6 +75,7 @@ class TestDataMiningSubsystem(unittest.TestCase):
             EDA_REPORT_FILE,
             EDA_CHART_FILE,
             FORECAST_FILE,
+            EVALUATION_FILE,
             EVAL_REPORT_FILE,
         ]
         for f in artifacts:
@@ -226,10 +228,27 @@ class TestDataMiningSubsystem(unittest.TestCase):
         self.assertLess(mae_rf, mae_base)
         self.assertLess(rmse_rf, rmse_base)
 
+        evaluation_df = pd.read_csv(EVALUATION_FILE, encoding="utf-8-sig")
+        self.assertListEqual(
+            list(evaluation_df.columns),
+            [
+                "model",
+                "mae",
+                "rmse",
+                "mape_percent",
+                "mae_improvement_percent",
+                "is_best",
+            ],
+        )
+        self.assertEqual(evaluation_df["is_best"].sum(), 1)
+        self.assertTrue((evaluation_df["mape_percent"] > 0).all())
+
         with EVAL_REPORT_FILE.open("r", encoding="utf-8") as f:
             eval_text = f.read()
-        self.assertIn("14.7424", eval_text)
-        self.assertIn("13.9641", eval_text)
+        for _, row in evaluation_df.iterrows():
+            self.assertIn(f"{row['mae']:.4f}", eval_text)
+            self.assertIn(f"{row['rmse']:.4f}", eval_text)
+            self.assertIn(f"{row['mape_percent']:.2f}", eval_text)
         print("  -> ĐẠT: Không có giá trị âm, MAE/RMSE tính toán lại khớp chính xác 100% với báo cáo.")
 
     def test_E2_time_split_and_no_future_leakage(self):

@@ -7,13 +7,16 @@ export const getAuditLogs = async (
   res: Response
 ): Promise<void> => {
   try {
-    const maKho = req.maKhoContext;
+    const maKho = (req.query.ma_kho as string) || req.maKhoContext;
+    const category = (req.query.category as string) || 'ALL';
+    const limit = parseInt(req.query.limit as string, 10) || 100;
 
-    const logs = await getInventoryAuditLogs(maKho);
+    const result = await getInventoryAuditLogs(maKho, category, limit);
 
     res.status(200).json({
       success: true,
-      data: logs,
+      data: result.logs,
+      summary: result.summary,
     });
   } catch (err: any) {
     console.error('Audit controller error:', err);

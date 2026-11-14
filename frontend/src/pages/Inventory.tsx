@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useMemo } from 'react';
 import { useLocation } from 'react-router-dom';
 import { useWarehouse } from '../contexts/WarehouseContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -21,7 +21,9 @@ import {
   Ban,
   Truck,
   AlertTriangle,
-  X
+  X,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 
 interface FormLineItem {
@@ -69,6 +71,15 @@ export default function Inventory() {
   const [loadingReceipts, setLoadingReceipts] = useState<boolean>(false);
   const [receiptsError, setReceiptsError] = useState<string>('');
   const [filterStatus, setFilterStatus] = useState<string>('');
+
+  // Phân trang danh sách phiếu (tránh đơ trình duyệt khi nhiều phiếu)
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const pageSize = 15;
+  const totalPages = Math.ceil(receipts.length / pageSize) || 1;
+  const paginatedReceipts = useMemo(() => {
+    const start = (currentPage - 1) * pageSize;
+    return receipts.slice(start, start + pageSize);
+  }, [receipts, currentPage, pageSize]);
 
   // Hàm sinh mã khớp 100% với quy chuẩn codeGenerator.ts ở Backend
   const generateFrontendCode = (importing: boolean, kho: string) => {
@@ -156,6 +167,7 @@ export default function Inventory() {
 
   // 3. Tải lại danh sách phiếu khi đổi kho, đổi filter status hoặc đổi tab
   useEffect(() => {
+    setCurrentPage(1);
     fetchReceipts();
   }, [selectedWarehouse, isImport, filterStatus]);
 
@@ -807,119 +819,155 @@ export default function Inventory() {
         )}
 
         {!loadingReceipts && !receiptsError && receipts.length > 0 && (
-          <div className="overflow-x-auto">
-            <table className="w-full text-left text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase font-bold tracking-wider">
-                  <th className="py-2.5 px-3">Mã Phiếu</th>
-                  <th className="py-2.5 px-3">{isImport ? 'Nhà Cung Cấp' : 'Khách Hàng'}</th>
-                  <th className="py-2.5 px-3">{isImport ? 'Ngày Nhập' : 'Ngày Xuất'}</th>
-                  <th className="py-2.5 px-3 text-right">Tổng SL</th>
-                  <th className="py-2.5 px-3 text-right">Tổng Tiền</th>
-                  <th className="py-2.5 px-3 text-center">Trạng Thái</th>
-                  <th className="py-2.5 px-3 text-center">Thao Tác</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-slate-100">
-                {receipts.map((receipt) => (
-                  <tr key={receipt.ma_phieu} className="hover:bg-slate-50/80 transition-colors">
-                    <td className="py-3 px-3 font-mono font-bold text-slate-800">
-                      {receipt.ma_phieu}
-                    </td>
-                    <td className="py-3 px-3 font-medium text-slate-700">
-                      {receipt.ten_partner || receipt.ma_partner || '—'}
-                    </td>
-                    <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
-                      {new Date(receipt.ngay).toLocaleString('vi-VN')}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
-                      {receipt.tong_so_luong.toLocaleString('vi-VN')}
-                    </td>
-                    <td className="py-3 px-3 text-right font-mono font-semibold text-slate-700">
-                      {receipt.tong_tien.toLocaleString('vi-VN')} đ
-                    </td>
-                    <td className="py-3 px-3 text-center">
-                      {getStatusBadge(receipt.trang_thai)}
-                    </td>
-                    <td className="py-3 px-3 text-center whitespace-nowrap">
-                      <div className="flex items-center justify-center gap-1.5">
-                        {/* Nút Xem chi tiết */}
-                        <button
-                          type="button"
-                          onClick={() => setDetailModalReceipt(receipt)}
-                          className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors cursor-pointer"
-                          title="Xem chi tiết phiếu"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                        </button>
-
-                        {/* Nhóm nút Duyệt / Từ chối (Quản lý kho khi CHO_DUYET) */}
-                        {receipt.trang_thai === 'CHO_DUYET' && isQuanLyKho && (
-                          <>
-                            <button
-                              type="button"
-                              onClick={() => setApproveRejectModal({ receipt, type: 'APPROVE' })}
-                              className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1"
-                              title="Duyệt yêu cầu"
-                            >
-                              <Check className="w-3 h-3" />
-                              <span>Duyệt</span>
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => setApproveRejectModal({ receipt, type: 'REJECT' })}
-                              className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1"
-                              title="Từ chối yêu cầu"
-                            >
-                              <Ban className="w-3 h-3" />
-                              <span>Từ chối</span>
-                            </button>
-                          </>
-                        )}
-
-                        {/* Với Nhập kho: Nhận hàng kiểm đếm */}
-                        {isImport && (receipt.trang_thai === 'DA_DUYET' || receipt.trang_thai === 'CHO_GIAO_BO_SUNG') && isNhanVienKho && (
-                          <button
-                            type="button"
-                            onClick={() => openReceiveModal(receipt)}
-                            className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
-                          >
-                            <Truck className="w-3 h-3" />
-                            <span>{receipt.trang_thai === 'CHO_GIAO_BO_SUNG' ? 'Nhận bổ sung' : 'Kiểm đếm nhận'}</span>
-                          </button>
-                        )}
-
-                        {/* Với Nhập kho: Xử lý thiếu hàng */}
-                        {isImport && receipt.trang_thai === 'THIEU_HANG' && isQuanLyKho && (
-                          <button
-                            type="button"
-                            onClick={() => openShortageModal(receipt)}
-                            className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1 animate-pulse"
-                          >
-                            <AlertTriangle className="w-3 h-3" />
-                            <span>Xử lý thiếu</span>
-                          </button>
-                        )}
-
-                        {/* Với Xuất kho: Xác nhận xuất hàng thực tế */}
-                        {!isImport && receipt.trang_thai === 'DA_DUYET' && isNhanVienKho && (
-                          <button
-                            type="button"
-                            onClick={() => handleConfirmShip(receipt)}
-                            className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
-                            title="Xác nhận hàng đã rời kho (trừ tồn kho)"
-                          >
-                            <Truck className="w-3 h-3" />
-                            <span>Xuất hàng</span>
-                          </button>
-                        )}
-                      </div>
-                    </td>
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-200 bg-slate-50 text-slate-600 uppercase font-bold tracking-wider">
+                    <th className="py-2.5 px-3">Mã Phiếu</th>
+                    <th className="py-2.5 px-3">{isImport ? 'Nhà Cung Cấp' : 'Khách Hàng'}</th>
+                    <th className="py-2.5 px-3">{isImport ? 'Ngày Nhập' : 'Ngày Xuất'}</th>
+                    <th className="py-2.5 px-3 text-right">Tổng SL</th>
+                    <th className="py-2.5 px-3 text-right">Tổng Tiền</th>
+                    <th className="py-2.5 px-3 text-center">Trạng Thái</th>
+                    <th className="py-2.5 px-3 text-center">Thao Tác</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {paginatedReceipts.map((receipt) => (
+                    <tr key={receipt.ma_phieu} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="py-3 px-3 font-mono font-bold text-slate-800">
+                        {receipt.ma_phieu}
+                      </td>
+                      <td className="py-3 px-3 font-medium text-slate-700">
+                        {receipt.ten_partner || receipt.ma_partner || '—'}
+                      </td>
+                      <td className="py-3 px-3 text-slate-500 whitespace-nowrap">
+                        {new Date(receipt.ngay).toLocaleString('vi-VN')}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono font-bold text-slate-800">
+                        {receipt.tong_so_luong.toLocaleString('vi-VN')}
+                      </td>
+                      <td className="py-3 px-3 text-right font-mono font-semibold text-slate-700">
+                        {receipt.tong_tien.toLocaleString('vi-VN')} đ
+                      </td>
+                      <td className="py-3 px-3 text-center">
+                        {getStatusBadge(receipt.trang_thai)}
+                      </td>
+                      <td className="py-3 px-3 text-center whitespace-nowrap">
+                        <div className="flex items-center justify-center gap-1.5">
+                          {/* Nút Xem chi tiết */}
+                          <button
+                            type="button"
+                            onClick={() => setDetailModalReceipt(receipt)}
+                            className="p-1 text-slate-500 hover:text-slate-800 hover:bg-slate-100 rounded transition-colors cursor-pointer"
+                            title="Xem chi tiết phiếu"
+                          >
+                            <Eye className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* Nhóm nút Duyệt / Từ chối (Quản lý kho khi CHO_DUYET) */}
+                          {receipt.trang_thai === 'CHO_DUYET' && isQuanLyKho && (
+                            <>
+                              <button
+                                type="button"
+                                onClick={() => setApproveRejectModal({ receipt, type: 'APPROVE' })}
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 font-bold rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                                title="Duyệt yêu cầu"
+                              >
+                                <Check className="w-3 h-3" />
+                                <span>Duyệt</span>
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setApproveRejectModal({ receipt, type: 'REJECT' })}
+                                className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-700 font-bold rounded text-[11px] transition-colors cursor-pointer flex items-center gap-1"
+                                title="Từ chối yêu cầu"
+                              >
+                                <Ban className="w-3 h-3" />
+                                <span>Từ chối</span>
+                              </button>
+                            </>
+                          )}
+
+                          {/* Với Nhập kho: Nhận hàng kiểm đếm */}
+                          {isImport && (receipt.trang_thai === 'DA_DUYET' || receipt.trang_thai === 'CHO_GIAO_BO_SUNG') && isNhanVienKho && (
+                            <button
+                              type="button"
+                              onClick={() => openReceiveModal(receipt)}
+                              className="px-2.5 py-1 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
+                            >
+                              <Truck className="w-3 h-3" />
+                              <span>{receipt.trang_thai === 'CHO_GIAO_BO_SUNG' ? 'Nhận bổ sung' : 'Kiểm đếm nhận'}</span>
+                            </button>
+                          )}
+
+                          {/* Với Nhập kho: Xử lý thiếu hàng */}
+                          {isImport && receipt.trang_thai === 'THIEU_HANG' && isQuanLyKho && (
+                            <button
+                              type="button"
+                              onClick={() => openShortageModal(receipt)}
+                              className="px-2.5 py-1 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1 animate-pulse"
+                            >
+                              <AlertTriangle className="w-3 h-3" />
+                              <span>Xử lý thiếu</span>
+                            </button>
+                          )}
+
+                          {/* Với Xuất kho: Xác nhận xuất hàng thực tế */}
+                          {!isImport && receipt.trang_thai === 'DA_DUYET' && isNhanVienKho && (
+                            <button
+                              type="button"
+                              onClick={() => handleConfirmShip(receipt)}
+                              className="px-2.5 py-1 bg-purple-600 hover:bg-purple-700 text-white font-bold rounded text-[11px] shadow-2xs transition-colors cursor-pointer flex items-center gap-1"
+                              title="Xác nhận hàng đã rời kho (trừ tồn kho)"
+                            >
+                              <Truck className="w-3 h-3" />
+                              <span>Xuất hàng</span>
+                            </button>
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Thanh điều hướng phân trang */}
+            {totalPages > 1 && (
+              <div className="flex flex-col sm:flex-row items-center justify-between gap-3 pt-4 border-t border-slate-100 text-xs text-slate-500">
+                <div>
+                  Hiển thị <span className="font-bold text-slate-700">{(currentPage - 1) * pageSize + 1}</span> -{' '}
+                  <span className="font-bold text-slate-700">{Math.min(currentPage * pageSize, receipts.length)}</span> trên{' '}
+                  <span className="font-bold text-slate-700">{receipts.length.toLocaleString('vi-VN')}</span> phiếu
+                </div>
+                <div className="flex items-center gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+                    disabled={currentPage === 1}
+                    className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer"
+                    title="Trang trước"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <span className="px-3 py-1 bg-slate-50 border border-slate-200 rounded-lg font-mono font-bold text-slate-700">
+                    Trang {currentPage} / {totalPages}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-1.5 border border-slate-200 rounded-lg hover:bg-slate-50 disabled:opacity-40 disabled:hover:bg-transparent cursor-pointer"
+                    title="Trang sau"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
+                </div>
+              </div>
+            )}
+          </>
         )}
       </div>
 

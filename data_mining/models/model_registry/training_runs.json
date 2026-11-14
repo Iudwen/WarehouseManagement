@@ -1,7 +1,7 @@
 {
-  "total_runs": 14,
+  "total_runs": 16,
   "successful_runs": 3,
-  "failed_runs": 11,
+  "failed_runs": 13,
   "runs": [
     {
       "run_id": "run_20261023_044101",
@@ -211,6 +211,24 @@
       "run_id": "run_20261023_053621",
       "start_time": "2026-10-23 05:36:21",
       "end_time": "2026-10-23 05:36:21",
+      "duration_seconds": 0.0,
+      "status": "FAILED",
+      "error_type": "FILE_NOT_FOUND",
+      "message": "Analytical dataset not found at: D:\\Các hệ thống phân tán\\WarehouseManagement\\data_mining\\datasets\\non_existent_file.csv"
+    },
+    {
+      "run_id": "run_20261026_194136",
+      "start_time": "2026-10-26 19:41:36",
+      "end_time": "2026-10-26 19:41:36",
+      "duration_seconds": 0.02,
+      "status": "INSUFFICIENT_DATA",
+      "dataset_rows": 10,
+      "message": "Dataset too small (10 rows < 5000 minimum required)."
+    },
+    {
+      "run_id": "run_20261026_194136",
+      "start_time": "2026-10-26 19:41:36",
+      "end_time": "2026-10-26 19:41:36",
       "duration_seconds": 0.0,
       "status": "FAILED",
       "error_type": "FILE_NOT_FOUND",

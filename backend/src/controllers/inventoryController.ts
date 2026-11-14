@@ -1,4 +1,4 @@
-﻿import { Response } from 'express';
+import { Response } from 'express';
 import { Pool } from 'pg';
 import { CustomRequest } from '../types';
 import { getDbPool, pools } from '../config/postgresql';
@@ -25,7 +25,7 @@ const getBranchPool = (req: CustomRequest, fallbackKhoOrCode?: string): Pool => 
   if (fallbackKhoOrCode) {
     const match = fallbackKhoOrCode.match(/^(?:PN|PX|DC)_([A-Za-z0-9]+)_/i);
     const kho = match ? match[1] : fallbackKhoOrCode;
-    if (kho && kho.toUpperCase() !== 'CENTRAL') {
+    if (kho && kho.toUpperCase() !== 'CENTRAL' && kho.toUpperCase() !== 'ALL') {
       return getDbPool(kho);
     }
   }
@@ -39,11 +39,11 @@ const getBranchPool = (req: CustomRequest, fallbackKhoOrCode?: string): Pool => 
     (req.body?.ma_kho as string) ||
     (req.headers['x-warehouse-id'] as string);
 
-  if (maKhoFromReq && maKhoFromReq.toUpperCase() !== 'CENTRAL') {
+  if (maKhoFromReq && maKhoFromReq.toUpperCase() !== 'CENTRAL' && maKhoFromReq.toUpperCase() !== 'ALL') {
     return getDbPool(maKhoFromReq);
   }
 
-  if (req.user?.ma_kho && req.user.ma_kho.toUpperCase() !== 'CENTRAL') {
+  if (req.user?.ma_kho && req.user.ma_kho.toUpperCase() !== 'CENTRAL' && req.user.ma_kho.toUpperCase() !== 'ALL') {
     return getDbPool(req.user.ma_kho);
   }
 
@@ -71,11 +71,37 @@ export const handleListImports = async (req: CustomRequest, res: Response): Prom
     }
 
     const trangThai = (req.query.trang_thai as string) || undefined;
-    const pool = getBranchPool(req, targetKho);
+    const isAll = !targetKho || targetKho.toUpperCase() === 'ALL' || targetKho.toUpperCase() === 'CENTRAL';
 
+    if (isAll) {
+      const branchPools = [
+        { pool: pools.HN, kho: 'HN01' },
+        { pool: pools.DN, kho: 'DN01' },
+        { pool: pools.HCM, kho: 'HCM01' },
+      ];
+
+      const results = await Promise.allSettled(
+        branchPools.map(({ pool, kho }) => listImportReceipts(pool, kho, trangThai))
+      );
+
+      const combined = results
+        .filter((r): r is PromiseFulfilledResult<any[]> => r.status === 'fulfilled')
+        .flatMap((r) => r.value)
+        .sort((a, b) => new Date(b.ngay_nhap).getTime() - new Date(a.ngay_nhap).getTime());
+
+      res.status(200).json({
+        success: true,
+        count: combined.length,
+        data: combined,
+      });
+      return;
+    }
+
+    const pool = getBranchPool(req, targetKho);
     const data = await listImportReceipts(pool, targetKho, trangThai);
     res.status(200).json({
       success: true,
+      count: data.length,
       data,
     });
   } catch (err: any) {
@@ -217,8 +243,33 @@ export const handleListExports = async (req: CustomRequest, res: Response): Prom
     }
 
     const trangThai = (req.query.trang_thai as string) || undefined;
-    const pool = getBranchPool(req, targetKho);
+    const isAll = !targetKho || targetKho.toUpperCase() === 'ALL' || targetKho.toUpperCase() === 'CENTRAL';
 
+    if (isAll) {
+      const branchPools = [
+        { pool: pools.HN, kho: 'HN01' },
+        { pool: pools.DN, kho: 'DN01' },
+        { pool: pools.HCM, kho: 'HCM01' },
+      ];
+
+      const results = await Promise.allSettled(
+        branchPools.map(({ pool, kho }) => listExportReceipts(pool, kho, trangThai))
+      );
+
+      const combined = results
+        .filter((r): r is PromiseFulfilledResult<any[]> => r.status === 'fulfilled')
+        .flatMap((r) => r.value)
+        .sort((a, b) => new Date(b.ngay_xuat).getTime() - new Date(a.ngay_xuat).getTime());
+
+      res.status(200).json({
+        success: true,
+        count: combined.length,
+        data: combined,
+      });
+      return;
+    }
+
+    const pool = getBranchPool(req, targetKho);
     const data = await listExportReceipts(pool, targetKho, trangThai);
     res.status(200).json({
       success: true,

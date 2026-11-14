@@ -8,10 +8,12 @@
  */
 
 import { Pool } from 'pg';
+import mongoose from 'mongoose';
 import { getDbPool, pools } from '../config/postgresql';
 import { claimEvents, reapExpiredLeases } from './outboxPoller';
 import { relaySingleEvent } from './outboxRelay';
 import { WorkerConfig, OutboxEvent, RelayResult } from './types';
+import { sendOutboxEventToKafka } from '../kafka/producer';
 
 export class OutboxWorker {
   private isRunning: boolean = false;
@@ -187,6 +189,7 @@ export class OutboxWorker {
     }
 
     this.isPolling = true;
+    await this.recordHeartbeat();
     const results: RelayResult[] = [];
     let reclaimedCount = 0;
     let claimedCount = 0;
@@ -251,7 +254,19 @@ export class OutboxWorker {
             continue;
           }
 
-          // Gọi Relay với đúng claimedVersion từ event
+          // 1. Xuất bản sự kiện Outbox lên Apache Kafka Broker
+          try {
+            await sendOutboxEventToKafka(event, this.config.nodeName);
+          } catch (kafkaErr: any) {
+            console.error(
+              `[OUTBOX WORKER KAFKA ERROR] Gửi Kafka thất bại cho event ${event.event_id}:`,
+              kafkaErr?.message || kafkaErr
+            );
+            // Dừng xử lý để Outbox không bị đánh dấu PROCESSED khi chưa có xác nhận từ Kafka
+            throw kafkaErr;
+          }
+
+          // 2. Tiếp tục thực hiện relay sang Central Database với đúng claimedVersion từ event
           const res = await relaySingleEvent(this.nodePool, this.centralPool, event);
           results.push(res);
           processedCount++;
@@ -286,6 +301,31 @@ export class OutboxWorker {
     }
 
     return { reclaimedCount, claimedCount, processedCount, results };
+  }
+
+  private async recordHeartbeat(): Promise<void> {
+    try {
+      if (mongoose.connection.readyState === 0) {
+        const mongoUri = process.env.MONGO_URI || 'mongodb://127.0.0.1:27018/warehouse_events';
+        await mongoose.connect(mongoUri);
+      }
+      const db = mongoose.connection.db;
+      if (db && mongoose.connection.readyState === 1) {
+        await db.collection('worker_heartbeats').updateOne(
+          { node: this.config.nodeName },
+          {
+            $set: {
+              node: this.config.nodeName,
+              last_poll_at: new Date(),
+              status: 'RUNNING',
+            },
+          },
+          { upsert: true }
+        );
+      }
+    } catch {
+      // Bỏ qua lỗi heartbeat để không làm gián đoạn luồng nghiệp vụ Outbox
+    }
   }
 
   private scheduleNextPoll(delayMs?: number): void {

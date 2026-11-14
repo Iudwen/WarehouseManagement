@@ -52,8 +52,8 @@ export default function Dashboard() {
     return 'ALL';
   });
   const [granularity, setGranularity] = useState<'day' | 'month'>('month');
-  const [fromDate, setFromDate] = useState<string>('2025-09-18');
-  const [toDate, setToDate] = useState<string>('2026-09-18');
+  const [fromDate, setFromDate] = useState<string>('2025-10-01');
+  const [toDate, setToDate] = useState<string>('2026-10-31');
   const [ioData, setIoData] = useState<IOStatisticsData | null>(null);
   const [loadingIo, setLoadingIo] = useState(false);
   const [ioError, setIoError] = useState<string | null>(null);
@@ -137,12 +137,12 @@ export default function Dashboard() {
 
     if (preset === 'all_history') {
       setGranularity('month');
-      setFromDate('2025-09-18');
-      setToDate('2026-09-18');
+      setFromDate('2025-10-01');
+      setToDate('2026-10-31');
     } else if (preset === 'last_month') {
       setGranularity('day');
-      setFromDate('2026-09-01');
-      setToDate('2026-09-18');
+      setFromDate('2026-10-01');
+      setToDate('2026-10-31');
     } else if (preset === 'last_30') {
       const past30 = new Date(today);
       past30.setDate(past30.getDate() - 30);
@@ -435,7 +435,7 @@ export default function Dashboard() {
                 onClick={() => applyPreset('last_month')}
                 className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs"
               >
-                Tháng 09/2026
+                Tháng 10/2026
               </button>
               <button
                 type="button"

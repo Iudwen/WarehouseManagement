@@ -21,3 +21,9 @@ npm-debug.log*
 *.njsproj
 *.sln
 *.swp
+
+# Python cache & temporary files
+__pycache__/
+*.py[cod]
+*.bak
+scratch/

@@ -7,9 +7,34 @@ import {
   getAbcXyzAnalysis,
   getMarketBasketRules,
   getTransferRecommendations,
+  triggerRecalculateDss,
+  getDataLakeInfo,
 } from '../services/dataMiningService';
 
 const CENTRAL_ROLES = ['ADMIN', 'DIEU_PHOI', 'DATA_ANALYST'];
+
+/**
+ * GET /api/v1/data-mining/data-lake
+ * Lấy cấu trúc 3 tầng Medallion, báo cáo kiểm định chất lượng (Silver Quality Reports) và Delta Lakehouse metadata
+ */
+export const handleGetDataLakeInfo = async (
+  req: CustomRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const dataLake = getDataLakeInfo();
+    res.status(200).json({
+      success: true,
+      data: dataLake,
+    });
+  } catch (error: any) {
+    console.error('Data Lake Info Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Lỗi lấy thông tin Data Lakehouse',
+    });
+  }
+};
 
 /**
  * GET /api/v1/data-mining/summary
@@ -209,6 +234,36 @@ export const handleGetTransferRecommendations = async (
     res.status(isNotFound ? 404 : 500).json({
       success: false,
       message: error.message || 'Lỗi truy xuất đề xuất điều chuyển hàng',
+    });
+  }
+};
+
+/**
+ * POST /api/v1/data-mining/recalculate-dss
+ * Kích hoạt trích xuất live DB và tái tính toán đề xuất điều chuyển liên kho DSS
+ */
+export const handleRecalculateDss = async (
+  req: CustomRequest,
+  res: Response
+): Promise<void> => {
+  try {
+    const { vai_tro, ma_kho: userMaKho } = req.user || {};
+    let targetKho = (req.query.ma_kho as string) || (req.body?.ma_kho as string) || 'ALL';
+    if (!CENTRAL_ROLES.includes(vai_tro as string)) {
+      targetKho = userMaKho || req.maKhoContext || 'DN01';
+    }
+
+    const data = triggerRecalculateDss(targetKho);
+    res.status(200).json({
+      success: true,
+      message: 'Đã hoàn tất trích xuất database và tái tính toán đề xuất DSS thành công',
+      data,
+    });
+  } catch (error: any) {
+    console.error('Recalculate DSS Error:', error);
+    res.status(500).json({
+      success: false,
+      message: error.message || 'Lỗi khi tái tính toán đề xuất DSS',
     });
   }
 };

@@ -9,6 +9,8 @@ import AuditLogs from './pages/AuditLogs';
 import WarehouseMap from './pages/WarehouseMap';
 import Login from './pages/Login';
 import DemandForecast from './pages/DemandForecast';
+import SystemMonitoring from './pages/SystemMonitoring';
+import BackupRecovery from './pages/BackupRecovery';
 
 function AppRoutes() {
   const location = useLocation();
@@ -36,6 +38,8 @@ function AppRoutes() {
         <Route path="/reports" element={<DemandForecast />} />
         <Route path="/data-mining" element={<DemandForecast />} />
         <Route path="/forecast" element={<DemandForecast />} />
+        <Route path="/monitoring" element={<SystemMonitoring />} />
+        <Route path="/backup" element={<BackupRecovery />} />
       </Routes>
     </Layout>
   );

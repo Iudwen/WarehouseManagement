@@ -25,7 +25,7 @@ router.get(
 router.post(
   '/',
   auth,
-  roleGuard('DIEU_PHOI'),
+  roleGuard('DIEU_PHOI', 'ADMIN'),
   dbSelector,
   handleTransfer
 );
