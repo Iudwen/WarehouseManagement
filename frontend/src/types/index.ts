@@ -656,3 +656,87 @@ export interface RestoreResultData {
   collections?: string[];
   errorMessage?: string;
 }
+
+// ==========================================================
+// WAREHOUSE SLOTTING & STORAGE BINS TYPES (PHASE 6)
+// ==========================================================
+
+export interface SlottingOverviewData {
+  ma_kho: string;
+  total_bins: number;
+  used_bins: number;
+  empty_bins: number;
+  maintenance_bins: number;
+  active_bins: number;
+  total_skus: number;
+  total_quantity: number;
+  total_capacity: number;
+  golden_zone_bins: number;
+  mid_zone_bins: number;
+  top_storage_bins: number;
+  occupancy_rate: number;
+  space_utilization_rate: number;
+}
+
+export interface StorageBinItem {
+  ma_vi_tri: string;
+  ma_kho: string;
+  day_ke: string;
+  tang: number;
+  ngan: number;
+  vung_luu_tru: 'GOLDEN_ZONE' | 'MID_ZONE' | 'TOP_STORAGE';
+  suc_chua_toi_da: number;
+  trang_thai: 'ACTIVE' | 'MAINTENANCE';
+  so_luong_hien_tai: number;
+  ty_le_lap_day: number;
+  canh_bao_qua_tai: boolean;
+  san_pham: {
+    ma_sp: string;
+    ten_sp: string;
+    don_vi_tinh?: string;
+    so_luong: number;
+    cap_nhat_luc: string;
+  } | null;
+  vi_tri_cap_nhat_luc?: string;
+}
+
+export interface SlottingRecommendationItem {
+  ma_sp: string;
+  ten_sp: string;
+  ma_vi_tri_hien_tai: string;
+  vung_hien_tai: string;
+  tang_hien_tai: number;
+  nhom_abc?: string;
+  nhom_xyz?: string;
+  nhom_abc_xyz?: string;
+  tong_luong_xuat: number;
+  so_dong_xuat: number;
+  vung_de_xuat: string;
+  ly_do_de_xuat: string;
+  muc_do_uu_tien: 'CAO' | 'TRUNG_BINH' | 'THAP';
+  o_ke_goi_y: string[];
+}
+
+export interface SlottingAdvisorData {
+  ma_kho: string;
+  tong_so_khuyen_nghi: number;
+  danh_sach_khuyen_nghi: SlottingRecommendationItem[];
+  thong_diep?: string;
+}
+
+export interface StorageBinFilters {
+  vung_luu_tru?: string;
+  trang_thai?: string;
+  day_ke?: string;
+  tang?: number;
+  only_occupied?: boolean;
+}
+
+export interface MoveBinPayload {
+  ma_kho: string;
+  ma_sp: string;
+  from_bin: string;
+  to_bin: string;
+  so_luong: number;
+}
+

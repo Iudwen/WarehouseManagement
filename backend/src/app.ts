@@ -20,6 +20,7 @@ import auditRoutes from './routes/auditRoutes'; // Bổ sung Audit Route
 import dataMiningRoutes from './routes/dataMiningRoutes'; // Data Mining & Dự báo nhu cầu
 import monitoringRoutes from './routes/monitoringRoutes'; // API Giám sát Hệ thống Phân tán (Giai đoạn 4)
 import backupRoutes from './routes/backupRoutes'; // API Sao lưu & Phục hồi dữ liệu (Giai đoạn 5)
+import slottingRoutes from './routes/slottingRoutes'; // Phân hệ Warehouse Slotting (Giai đoạn 6)
 import { getDefaultEventConsumer } from './kafka';
 import { backupScheduler } from './services/backupScheduler';
 
@@ -61,6 +62,7 @@ app.use('/api/v1/audit', auditRoutes); // Đăng ký route xem Log MongoDB
 app.use('/api/v1/data-mining', dataMiningRoutes); // API Data Mining & Dự báo nhu cầu xuất kho
 app.use('/api/v1/monitoring', monitoringRoutes); // Tuyến đường giám sát hệ thống phân tán (ADMIN only)
 app.use('/api/v1/backup', backupRoutes); // Tuyến đường sao lưu & phục hồi dữ liệu (ADMIN only)
+app.use('/api/v1/slotting', slottingRoutes); // Phân hệ Warehouse Slotting & Storage Bins
 
 app.get('/health', (req: Request, res: Response) => {
   res.json({ status: 'OK', message: 'Warehouse TypeScript Backend Distributed Core Ready!' });

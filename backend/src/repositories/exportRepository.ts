@@ -150,17 +150,76 @@ export const decreaseStock = async (
   maKho: string,
   item: { ma_sp: string; so_luong: number }
 ): Promise<void> => {
+  // 1. Kiểm tra tồn hiện tại trong ton_kho
+  const stockRes = await client.query(
+    `
+    SELECT so_luong
+    FROM ton_kho
+    WHERE ma_kho = $1 AND ma_sp = $2
+    FOR UPDATE
+    `,
+    [maKho, item.ma_sp]
+  );
+
+  if (stockRes.rows.length === 0 || Number(stockRes.rows[0].so_luong) < item.so_luong) {
+    throw new Error(`Tồn kho của sản phẩm ${item.ma_sp} tại kho ${maKho} không đủ để xuất`);
+  }
+
+  const currentStock = Number(stockRes.rows[0].so_luong);
+  const remainingStock = currentStock - item.so_luong;
+
+  // 2. Cập nhật ton_kho
   await client.query(
     `
     UPDATE ton_kho
     SET
-      so_luong = so_luong - $1,
+      so_luong = $1,
       cap_nhat_luc = NOW()
     WHERE ma_kho = $2
       AND ma_sp = $3
     `,
-    [item.so_luong, maKho, item.ma_sp]
+    [remainingStock, maKho, item.ma_sp]
   );
+
+  // 3. Đồng bộ phan_bo_o_ke trong cùng Transaction
+  if (remainingStock === 0) {
+    // Nếu hết tồn kho hoàn toàn, giải phóng ô kệ (tránh vi phạm ràng buộc CHECK so_luong > 0)
+    await client.query(
+      `
+      DELETE FROM phan_bo_o_ke
+      WHERE ma_kho = $1 AND ma_sp = $2
+      `,
+      [maKho, item.ma_sp]
+    );
+  } else {
+    const binRes = await client.query(
+      `
+      SELECT so_luong
+      FROM phan_bo_o_ke
+      WHERE ma_kho = $1 AND ma_sp = $2
+      FOR UPDATE
+      `,
+      [maKho, item.ma_sp]
+    );
+
+    if (binRes.rows.length === 0) {
+      throw new Error(`Không tìm thấy ô phân bổ kệ cho sản phẩm ${item.ma_sp} tại kho ${maKho}`);
+    }
+
+    const currentBinQty = Number(binRes.rows[0].so_luong);
+    if (currentBinQty < item.so_luong) {
+      throw new Error(`Số lượng trong ô kệ không đủ để xuất hàng`);
+    }
+
+    await client.query(
+      `
+      UPDATE phan_bo_o_ke
+      SET so_luong = $1, cap_nhat_luc = NOW()
+      WHERE ma_kho = $2 AND ma_sp = $3
+      `,
+      [remainingStock, maKho, item.ma_sp]
+    );
+  }
 };
 
 export const increaseExportHistory = async (

@@ -170,6 +170,7 @@ export const increaseStock = async (
   maKho: string,
   item: { ma_sp: string; so_luong: number }
 ): Promise<void> => {
+  // 1. Tăng tồn kho trong ton_kho
   await client.query(
     `
     INSERT INTO ton_kho (
@@ -186,6 +187,69 @@ export const increaseStock = async (
     `,
     [maKho, item.ma_sp, item.so_luong]
   );
+
+  // 2. Đồng bộ phan_bo_o_ke trong cùng Transaction
+  const existingBinRes = await client.query(
+    `
+    SELECT p.ma_vi_tri, p.so_luong, v.suc_chua_toi_da, v.trang_thai
+    FROM phan_bo_o_ke p
+    JOIN vi_tri_kho v ON p.ma_kho = v.ma_kho AND p.ma_vi_tri = v.ma_vi_tri
+    WHERE p.ma_kho = $1 AND p.ma_sp = $2
+    FOR UPDATE
+    `,
+    [maKho, item.ma_sp]
+  );
+
+  if (existingBinRes.rows.length > 0) {
+    const bin = existingBinRes.rows[0];
+    if (bin.trang_thai === 'MAINTENANCE') {
+      throw new Error(`Ô kệ ${bin.ma_vi_tri} đang trong trạng thái bảo trì (MAINTENANCE), không thể nhập hàng.`);
+    }
+    const newQty = Number(bin.so_luong) + item.so_luong;
+    if (newQty > Number(bin.suc_chua_toi_da)) {
+      throw new Error(
+        `Số lượng sau nhập (${newQty}) vượt quá sức chứa tối đa của ô ${bin.ma_vi_tri} (${bin.suc_chua_toi_da} units).`
+      );
+    }
+    await client.query(
+      `
+      UPDATE phan_bo_o_ke
+      SET so_luong = $1, cap_nhat_luc = NOW()
+      WHERE ma_kho = $2 AND ma_sp = $3
+      `,
+      [newQty, maKho, item.ma_sp]
+    );
+  } else {
+    // Tìm ô trống ACTIVE ưu tiên GOLDEN_ZONE / MID_ZONE
+    const emptyBinRes = await client.query(
+      `
+      SELECT ma_vi_tri, suc_chua_toi_da
+      FROM vi_tri_kho
+      WHERE ma_kho = $1 AND trang_thai = 'ACTIVE'
+        AND ma_vi_tri NOT IN (SELECT ma_vi_tri FROM phan_bo_o_ke WHERE ma_kho = $1)
+      ORDER BY day_ke ASC, tang ASC, ngan ASC
+      LIMIT 1
+      FOR UPDATE
+      `,
+      [maKho]
+    );
+    if (emptyBinRes.rows.length === 0) {
+      throw new Error(`Kho ${maKho} không còn ô kệ trống ACTIVE để phân bổ hàng hóa cho sản phẩm ${item.ma_sp}.`);
+    }
+    const emptyBin = emptyBinRes.rows[0];
+    if (item.so_luong > Number(emptyBin.suc_chua_toi_da)) {
+      throw new Error(
+        `Số lượng nhập (${item.so_luong}) vượt quá sức chứa tối đa của ô trống ${emptyBin.ma_vi_tri} (${emptyBin.suc_chua_toi_da} units).`
+      );
+    }
+    await client.query(
+      `
+      INSERT INTO phan_bo_o_ke (ma_kho, ma_vi_tri, ma_sp, so_luong, cap_nhat_luc)
+      VALUES ($1, $2, $3, $4, NOW())
+      `,
+      [maKho, emptyBin.ma_vi_tri, item.ma_sp, item.so_luong]
+    );
+  }
 };
 
 export const increaseImportHistory = async (
