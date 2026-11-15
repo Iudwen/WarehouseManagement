@@ -39,6 +39,7 @@ services:
       - ./data_center/central_database/05_create_indexes.sql:/docker-entrypoint-initdb.d/05_create_indexes.sql:ro
       - ./data_center/central_database/06_create_saga_monitoring.sql:/docker-entrypoint-initdb.d/06_create_saga_monitoring.sql:ro
       - ./data_center/central_database/07_create_saga_views.sql:/docker-entrypoint-initdb.d/07_create_saga_views.sql:ro
+      - ./data_center/central_database/08_seed_data.sql:/docker-entrypoint-initdb.d/08_seed_data.sql:ro
 
     healthcheck:
       test:
