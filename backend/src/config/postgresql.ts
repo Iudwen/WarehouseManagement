@@ -1,4 +1,20 @@
+import dotenv from 'dotenv';
+import fs from 'fs';
+import path from 'path';
 import { Pool } from 'pg';
+
+// Đảm bảo biến môi trường luôn được nạp đầy đủ dù file được gọi từ app, worker hay script độc lập
+const envPaths = [
+  path.resolve(process.cwd(), '.env'),
+  path.resolve(process.cwd(), '../.env'),
+  path.resolve(__dirname, '../../../.env'),
+];
+for (const envPath of envPaths) {
+  if (fs.existsSync(envPath)) {
+    dotenv.config({ path: envPath });
+    break;
+  }
+}
 
 export const pools: Record<string, Pool> = {
   HN: new Pool({

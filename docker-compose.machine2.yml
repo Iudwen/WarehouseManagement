@@ -1,0 +1,132 @@
+# ==========================================================
+# WAREHOUSE MANAGEMENT - MACHINE 2: DISTRIBUTED NODES
+# ==========================================================
+# Cụm cơ sở dữ liệu chi nhánh chạy trên Máy 2:
+# - postgres_dn  : Database Kho Đà Nẵng  (Port LAN 5434 : Container 5432)
+# - postgres_hcm : Database Kho TP.HCM   (Port LAN 5435 : Container 5432)
+#
+# Khởi động: docker compose -f docker-compose.machine2.yml up -d
+# ==========================================================
+
+services:
+
+  # ==========================================================
+  # NODE DN (KHO ĐÀ NẴNG)
+  # ==========================================================
+  postgres_dn:
+    image: postgres:18
+    container_name: warehouse_postgres_dn
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB_DN:-warehouse_dn}
+
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+
+    ports:
+      - "${POSTGRES_PORT_DN:-5434}:5432"
+
+    volumes:
+      - postgres_dn_data:/var/lib/postgresql
+      - ./nodes/node_dn/01_create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql:ro
+      - ./nodes/node_dn/02_create_global_tables.sql:/docker-entrypoint-initdb.d/02_create_global_tables.sql:ro
+      - ./nodes/node_dn/03_create_dn_fragments.sql:/docker-entrypoint-initdb.d/03_create_dn_fragments.sql:ro
+      - ./nodes/node_dn/04_create_constraints.sql:/docker-entrypoint-initdb.d/04_create_constraints.sql:ro
+      - ./nodes/node_dn/05_insert_dn_data.sql:/docker-entrypoint-initdb.d/05_insert_dn_data.sql:ro
+      - ./nodes/node_dn/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
+      - ./nodes/node_dn/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+      - ./nodes/node_dn/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
+      - ./nodes/node_dn/10_create_slotting_bins.sql:/docker-entrypoint-initdb.d/10_create_slotting_bins.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB_DN:-warehouse_dn}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_nodes_network
+
+
+  # ==========================================================
+  # NODE HCM (KHO TP. HỒ CHÍ MINH)
+  # ==========================================================
+  postgres_hcm:
+    image: postgres:18
+    container_name: warehouse_postgres_hcm
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB_HCM:-warehouse_hcm}
+
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+
+    ports:
+      - "${POSTGRES_PORT_HCM:-5435}:5432"
+
+    volumes:
+      - postgres_hcm_data:/var/lib/postgresql
+      - ./nodes/node_hcm/01_create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql:ro
+      - ./nodes/node_hcm/02_create_global_tables.sql:/docker-entrypoint-initdb.d/02_create_global_tables.sql:ro
+      - ./nodes/node_hcm/03_create_hcm_fragments.sql:/docker-entrypoint-initdb.d/03_create_hcm_fragments.sql:ro
+      - ./nodes/node_hcm/04_create_constraints.sql:/docker-entrypoint-initdb.d/04_create_constraints.sql:ro
+      - ./nodes/node_hcm/05_insert_hcm_data.sql:/docker-entrypoint-initdb.d/05_insert_hcm_data.sql:ro
+      - ./nodes/node_hcm/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
+      - ./nodes/node_hcm/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+      - ./nodes/node_hcm/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
+      - ./nodes/node_hcm/10_create_slotting_bins.sql:/docker-entrypoint-initdb.d/10_create_slotting_bins.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB_HCM:-warehouse_hcm}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_nodes_network
+
+
+# ==========================================================
+# VOLUMES
+# ==========================================================
+volumes:
+  postgres_dn_data:
+    name: warehouse_postgres_dn_data
+
+  postgres_hcm_data:
+    name: warehouse_postgres_hcm_data
+
+
+# ==========================================================
+# NETWORK
+# ==========================================================
+networks:
+  warehouse_nodes_network:
+    name: warehouse_nodes_network
+    driver: bridge

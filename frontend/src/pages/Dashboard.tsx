@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo } from 'react';
+import { useNavigate } from 'react-router-dom';
 import api from '../services/api';
 import { useWarehouse } from '../contexts/WarehouseContext';
 import { useAuth } from '../contexts/AuthContext';
@@ -27,9 +28,18 @@ import {
   Building2,
   Clock,
   Sparkles,
+  Search,
+  ArrowRight,
 } from 'lucide-react';
+import {
+  PageHeader,
+  StatCard,
+  StatusBadge,
+  EmptyState,
+} from '../components/ui';
 
 export default function Dashboard() {
+  const navigate = useNavigate();
   const { selectedWarehouse, isWarehouseLocked } = useWarehouse();
   const { user } = useAuth();
 
@@ -62,6 +72,7 @@ export default function Dashboard() {
   const [topTab, setTopTab] = useState<'import' | 'export'>('import');
   const [tablePage, setTablePage] = useState(1);
   const [hoveredPoint, setHoveredPoint] = useState<IOTimelinePoint | null>(null);
+  const [stockSearchQuery, setStockSearchQuery] = useState('');
   const rowsPerPage = 10;
 
   // Đồng bộ kho khi selectedWarehouse thay đổi
@@ -192,6 +203,18 @@ export default function Dashboard() {
 
   const totalQty = stocks.reduce((acc, item) => acc + item.so_luong, 0);
 
+  // Filter stocks by search
+  const filteredStocks = useMemo(() => {
+    if (!stockSearchQuery.trim()) return stocks;
+    const q = stockSearchQuery.toLowerCase();
+    return stocks.filter(
+      (s) =>
+        s.ma_sp.toLowerCase().includes(q) ||
+        (s.ten_sp && s.ten_sp.toLowerCase().includes(q)) ||
+        (s.ten_kho && s.ten_kho.toLowerCase().includes(q))
+    );
+  }, [stocks, stockSearchQuery]);
+
   // Dữ liệu phân trang cho bảng chi tiết
   const timelinePoints = ioData?.timeline || [];
   const totalTablePages = Math.ceil(timelinePoints.length / rowsPerPage) || 1;
@@ -211,113 +234,148 @@ export default function Dashboard() {
   }, [timelinePoints]);
 
   return (
-    <div className="space-y-8 pb-12">
+    <div className="space-y-6 pb-12">
       {/* 1. Header & Title Bar */}
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-2xl font-black text-slate-800 tracking-tight">
-              TỔNG QUAN HỆ THỐNG KHO
-            </h1>
-            <span className="px-2.5 py-0.5 rounded-full text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200">
-              Chi nhánh: {selectedWarehouse}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 mt-1">
-            Giám sát tồn kho phân tán và phân tích luồng xuất - nhập hàng hóa toàn quốc
-          </p>
-        </div>
-
-        <div className="flex items-center gap-3">
+      <PageHeader
+        title="BẢNG ĐIỀU KHIỂN & VẬN HÀNH KHO"
+        subtitle="Giám sát thời gian thực tồn kho phân tán, cảnh báo an toàn và phân tích luồng xuất - nhập hàng hóa toàn quốc"
+        breadcrumbs={[
+          { label: 'WMS', href: '/' },
+          { label: 'Bảng Điều Khiển' },
+        ]}
+        badge={
+          <StatusBadge variant="info">
+            Chi nhánh: {selectedWarehouse}
+          </StatusBadge>
+        }
+        actions={
           <button
             onClick={() => {
               fetchDashboardData();
               fetchIOStatistics();
             }}
             disabled={loadingStocks || loadingIo}
-            className="flex items-center gap-2 px-4 py-2.5 bg-blue-600 text-white text-xs font-bold rounded-xl shadow-sm hover:bg-blue-700 active:scale-95 transition-all disabled:opacity-50"
+            className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 active:scale-95 text-white text-xs font-bold rounded-xl shadow-xs transition-all disabled:opacity-50 cursor-pointer"
           >
             <RefreshCw
               className={`w-3.5 h-3.5 ${loadingStocks || loadingIo ? 'animate-spin' : ''}`}
             />
             <span>Làm mới toàn bộ</span>
           </button>
-        </div>
+        }
+      />
+
+      {/* 2. Top 4 Operational KPI StatCards */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+        <StatCard
+          title="Tổng Tồn Kho (SKU)"
+          value={loadingStocks ? '...' : totalQty.toLocaleString()}
+          unit="SP"
+          subtitle={`Tại kho ${selectedWarehouse} (${stocks.length} mã mặt hàng)`}
+          icon={Package}
+          variant="primary"
+          loading={loadingStocks}
+          onClick={() => navigate('/inventory')}
+        />
+
+        <StatCard
+          title="Phiếu Nhập Chờ Xử Lý"
+          value={loadingStocks ? '...' : pendingImports}
+          unit="chứng từ"
+          subtitle="Phiếu chờ duyệt & nhập thực tế"
+          icon={ArrowDownLeft}
+          variant="warning"
+          loading={loadingStocks}
+          onClick={() => navigate('/import')}
+        />
+
+        <StatCard
+          title="Phiếu Xuất Chờ Xử Lý"
+          value={loadingStocks ? '...' : pendingExports}
+          unit="chứng từ"
+          subtitle="Phiếu xuất đang chờ bàn giao"
+          icon={ArrowUpRight}
+          variant="info"
+          loading={loadingStocks}
+          onClick={() => navigate('/export')}
+        />
+
+        <StatCard
+          title="Cảnh Báo Sắp Hết Hàng"
+          value={loadingStocks ? '...' : alerts.length}
+          unit="mặt hàng"
+          subtitle={alerts.length > 0 ? 'Tồn kho dưới ngưỡng an toàn' : 'Tồn kho ở mức an toàn'}
+          icon={AlertTriangle}
+          variant={alerts.length > 0 ? 'danger' : 'success'}
+          loading={loadingStocks}
+          badge={
+            alerts.length > 0 ? (
+              <span className="w-2 h-2 rounded-full bg-rose-500 animate-ping inline-block" />
+            ) : undefined
+          }
+        />
       </div>
 
-      {/* 2. Top 4 Quick KPI Summary Cards */}
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-start hover:shadow-md transition-shadow">
-          <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Tổng Tồn Kho (SKU)
-            </span>
-            <div className="text-2xl font-black text-slate-800 mt-1">
-              {loadingStocks ? '...' : totalQty.toLocaleString()}
+      {/* 2.5. Cảnh Báo Nguy Cấp Nếu Có (Low Stock Action Section) */}
+      {alerts.length > 0 && (
+        <div className="bg-rose-50/50 rounded-2xl border border-rose-200 p-5 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-rose-100 text-rose-600 rounded-xl">
+                <AlertTriangle className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-rose-900">
+                  CẢNH BÁO TỒN KHO NGUY CẤP ({alerts.length} MẶT HÀNG DƯỚI NGƯỠNG AN TOÀN)
+                </h3>
+                <p className="text-xs text-rose-700">
+                  Các mặt hàng sau đây có số lượng tồn thấp hơn ngưỡng tối thiểu, cần lập kế hoạch nhập hàng hoặc điều chuyển ngay.
+                </p>
+              </div>
             </div>
-            <span className="text-[11px] text-emerald-600 font-semibold mt-1 block">
-              Tại kho {selectedWarehouse} ({stocks.length} mã mặt hàng)
-            </span>
-          </div>
-          <div className="p-3 bg-blue-50 text-blue-600 rounded-xl">
-            <Package className="w-5 h-5" />
-          </div>
-        </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-start hover:shadow-md transition-shadow">
-          <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Phiếu Nhập Chờ Xử Lý
-            </span>
-            <div className="text-2xl font-black text-amber-600 mt-1">
-              {loadingStocks ? '...' : pendingImports}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => navigate('/transfer')}
+                className="px-3 py-1.5 bg-white border border-rose-300 hover:bg-rose-50 text-rose-700 text-xs font-bold rounded-xl transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+              >
+                <span>Điều Chuyển Ngay</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <span className="text-[11px] text-slate-400 font-medium mt-1 block">
-              Phiếu chờ duyệt & nhập thực tế
-            </span>
           </div>
-          <div className="p-3 bg-amber-50 text-amber-600 rounded-xl">
-            <ArrowDownLeft className="w-5 h-5" />
-          </div>
-        </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/80 shadow-xs flex justify-between items-start hover:shadow-md transition-shadow">
-          <div>
-            <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">
-              Phiếu Xuất Chờ Xử Lý
-            </span>
-            <div className="text-2xl font-black text-indigo-600 mt-1">
-              {loadingStocks ? '...' : pendingExports}
-            </div>
-            <span className="text-[11px] text-slate-400 font-medium mt-1 block">
-              Phiếu xuất đang chờ xử lý
-            </span>
-          </div>
-          <div className="p-3 bg-indigo-50 text-indigo-600 rounded-xl">
-            <ArrowUpRight className="w-5 h-5" />
-          </div>
-        </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 pt-1">
+            {alerts.slice(0, 6).map((al, idx) => (
+              <div
+                key={idx}
+                className="bg-white p-3.5 rounded-xl border border-rose-200/90 shadow-2xs flex items-center justify-between gap-3"
+              >
+                <div className="min-w-0">
+                  <div className="font-bold text-xs text-slate-900 truncate">
+                    {al.ten_sp}
+                  </div>
+                  <div className="text-[11px] text-slate-500 font-mono mt-0.5">
+                    Mã: {al.ma_sp} · Kho: {al.ma_kho}
+                  </div>
+                </div>
 
-        <div className="bg-white p-5 rounded-2xl border border-rose-200 bg-rose-50/20 shadow-xs flex justify-between items-start hover:shadow-md transition-shadow">
-          <div>
-            <span className="text-[11px] font-bold text-rose-700 uppercase tracking-wider">
-              Cảnh Báo Sắp Hết Hàng
-            </span>
-            <div className="text-2xl font-black text-rose-600 mt-1">
-              {loadingStocks ? '...' : alerts.length}
-            </div>
-            <span className="text-[11px] text-rose-500 font-medium mt-1 block">
-              Tồn kho dưới ngưỡng an toàn
-            </span>
-          </div>
-          <div className="p-3 bg-rose-100 text-rose-600 rounded-xl">
-            <AlertTriangle className="w-5 h-5" />
+                <div className="text-right shrink-0">
+                  <div className="text-xs font-black text-rose-600">
+                    {al.so_luong.toLocaleString()} SP
+                  </div>
+                  <div className="text-[10px] text-slate-400 font-medium">
+                    Ngưỡng tối thiểu: {al.ton_toi_thieu}
+                  </div>
+                </div>
+              </div>
+            ))}
           </div>
         </div>
-      </div>
+      )}
 
       {/* 3. SECTION TRỌNG TÂM: THỐNG KÊ NHẬP – XUẤT KHO */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 space-y-6">
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs p-6 space-y-6">
         {/* Tiêu đề Section & Nguồn dữ liệu */}
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 pb-4 border-b border-slate-100">
           <div>
@@ -326,7 +384,7 @@ export default function Dashboard() {
                 <BarChart3 className="w-5 h-5" />
               </div>
               <div>
-                <h2 className="text-lg font-black text-slate-800 tracking-tight">
+                <h2 className="text-lg font-black text-slate-900 tracking-tight">
                   THỐNG KÊ NHẬP – XUẤT KHO
                 </h2>
                 <p className="text-xs text-slate-500">
@@ -338,8 +396,8 @@ export default function Dashboard() {
 
           <div className="flex flex-wrap items-center gap-2">
             {ioData?.source === 'HISTORICAL_DATASET' ? (
-              <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-700 border border-amber-200 rounded-full text-xs font-semibold">
-                <Sparkles className="w-3.5 h-3.5 text-amber-500" />
+              <span className="flex items-center gap-1.5 px-3 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-full text-xs font-semibold">
+                <Sparkles className="w-3.5 h-3.5 text-amber-600" />
                 Lịch sử giao dịch chuẩn hóa (2025 - 2026)
               </span>
             ) : (
@@ -352,7 +410,7 @@ export default function Dashboard() {
             <button
               onClick={exportToCSV}
               disabled={!ioData?.timeline || ioData.timeline.length === 0}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg text-xs font-bold transition-all disabled:opacity-40"
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all disabled:opacity-40 cursor-pointer"
               title="Xuất bảng thống kê ra file CSV"
             >
               <Download className="w-3.5 h-3.5" />
@@ -374,7 +432,7 @@ export default function Dashboard() {
                 <select
                   value={ioWarehouse}
                   onChange={(e) => setIoWarehouse(e.target.value)}
-                  className="bg-white text-xs font-bold text-slate-800 px-3 py-1.5 rounded-lg border border-slate-300 focus:outline-blue-500 cursor-pointer shadow-2xs"
+                  className="bg-white text-xs font-bold text-slate-800 px-3 py-1.5 rounded-xl border border-slate-300 focus:outline-blue-500 cursor-pointer shadow-2xs"
                 >
                   <option value="ALL">🌐 Toàn Hệ Thống (Tất Cả Các Kho)</option>
                   <option value="HN01">🏢 Kho Hà Nội (HN01)</option>
@@ -382,7 +440,7 @@ export default function Dashboard() {
                   <option value="HCM01">🏢 Kho TP.HCM (HCM01)</option>
                 </select>
               ) : (
-                <span className="bg-white text-xs font-bold text-slate-700 px-3 py-1.5 rounded-lg border border-slate-300 shadow-2xs">
+                <span className="bg-white text-xs font-bold text-slate-700 px-3 py-1.5 rounded-xl border border-slate-300 shadow-2xs">
                   {ioWarehouse === 'HN01'
                     ? 'Kho Hà Nội (HN01)'
                     : ioWarehouse === 'DN01'
@@ -399,7 +457,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => setGranularity('day')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   granularity === 'day'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -410,7 +468,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => setGranularity('month')}
-                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all ${
+                className={`px-3 py-1 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                   granularity === 'month'
                     ? 'bg-blue-600 text-white shadow-xs'
                     : 'text-slate-600 hover:text-slate-900'
@@ -426,28 +484,28 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => applyPreset('all_history')}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs"
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs cursor-pointer"
               >
-                Toàn Bộ Lịch Sử (2025-2026)
+                Toàn Bộ Lịch Sử
               </button>
               <button
                 type="button"
                 onClick={() => applyPreset('last_month')}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs"
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs cursor-pointer"
               >
                 Tháng 10/2026
               </button>
               <button
                 type="button"
                 onClick={() => applyPreset('last_30')}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs"
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs cursor-pointer"
               >
                 30 Ngày Gần Nhất
               </button>
               <button
                 type="button"
                 onClick={() => applyPreset('today')}
-                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs"
+                className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg border border-slate-200 font-semibold shadow-2xs cursor-pointer"
               >
                 Hôm Nay
               </button>
@@ -480,7 +538,7 @@ export default function Dashboard() {
             <button
               onClick={fetchIOStatistics}
               disabled={loadingIo}
-              className="ml-auto px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs"
+              className="ml-auto px-3.5 py-1.5 bg-slate-800 hover:bg-slate-900 text-white rounded-lg font-bold flex items-center gap-1.5 shadow-xs cursor-pointer"
             >
               <Filter className="w-3.5 h-3.5" />
               Áp Dụng Lọc
@@ -681,12 +739,11 @@ export default function Dashboard() {
               <span className="text-xs font-semibold">Đang tổng hợp dữ liệu thời gian...</span>
             </div>
           ) : timelinePoints.length === 0 ? (
-            <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-2 border-2 border-dashed border-slate-200 rounded-xl">
-              <Package className="w-8 h-8 text-slate-300" />
-              <span className="text-xs font-medium">
-                Không tìm thấy dữ liệu giao dịch nhập/xuất trong khoảng thời gian đã chọn
-              </span>
-            </div>
+            <EmptyState
+              title="Không tìm thấy dữ liệu giao dịch"
+              description="Không có bản ghi nhập/xuất kho nào phù hợp trong khoảng thời gian đã chọn."
+              compact
+            />
           ) : (
             <div className="relative">
               {/* Tooltip Hover Overlay */}
@@ -934,7 +991,7 @@ export default function Dashboard() {
               <div className="flex items-center bg-slate-100 p-1 rounded-xl text-xs font-bold">
                 <button
                   onClick={() => setTopTab('import')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
                     topTab === 'import'
                       ? 'bg-emerald-600 text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -944,7 +1001,7 @@ export default function Dashboard() {
                 </button>
                 <button
                   onClick={() => setTopTab('export')}
-                  className={`px-3 py-1 rounded-lg transition-all ${
+                  className={`px-3 py-1 rounded-lg transition-all cursor-pointer ${
                     topTab === 'export'
                       ? 'bg-indigo-600 text-white shadow-2xs'
                       : 'text-slate-600 hover:text-slate-900'
@@ -1103,14 +1160,14 @@ export default function Dashboard() {
                 <button
                   disabled={tablePage <= 1}
                   onClick={() => setTablePage((p) => Math.max(1, p - 1))}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold flex items-center gap-1 hover:bg-slate-50 disabled:opacity-40"
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold flex items-center gap-1 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
                 >
                   <ChevronLeft className="w-3.5 h-3.5" /> Trước
                 </button>
                 <button
                   disabled={tablePage >= totalTablePages}
                   onClick={() => setTablePage((p) => Math.min(totalTablePages, p + 1))}
-                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold flex items-center gap-1 hover:bg-slate-50 disabled:opacity-40"
+                  className="px-3 py-1.5 bg-white border border-slate-200 rounded-lg font-bold flex items-center gap-1 hover:bg-slate-50 disabled:opacity-40 cursor-pointer"
                 >
                   Sau <ChevronRight className="w-3.5 h-3.5" />
                 </button>
@@ -1120,76 +1177,96 @@ export default function Dashboard() {
         </div>
       </div>
 
-      {/* 4. Danh Sách Tồn Kho Chi Tiết (Bảng Realtime Hiện Có) */}
-      <div className="bg-white p-6 rounded-2xl border border-slate-200 shadow-sm space-y-4">
-        <div className="flex justify-between items-center">
-          <h2 className="font-bold text-slate-800 text-base">
-            DANH SÁCH TỒN KHO REALTIME ({selectedWarehouse})
-          </h2>
-          <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full">
-            {stocks.length} Mặt hàng
-          </span>
+      {/* 4. Danh Sách Tồn Kho Chi Tiết (Bảng Realtime) */}
+      <div className="bg-white p-6 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
+          <div>
+            <h2 className="font-bold text-slate-900 text-base">
+              DANH SÁCH TỒN KHO REALTIME ({selectedWarehouse})
+            </h2>
+            <p className="text-xs text-slate-500 mt-0.5">
+              Tra cứu nhanh lượng hàng khả dụng và phân bổ theo từng vị trí kho
+            </p>
+          </div>
+
+          <div className="flex items-center gap-3 w-full sm:w-auto">
+            <div className="flex items-center gap-2 bg-slate-100 px-3 py-1.5 rounded-xl border border-slate-200 text-xs w-full sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              <input
+                type="text"
+                placeholder="Lọc SKU hoặc tên sản phẩm..."
+                value={stockSearchQuery}
+                onChange={(e) => setStockSearchQuery(e.target.value)}
+                className="bg-transparent border-none outline-none w-full text-slate-700 placeholder-slate-400 text-xs"
+              />
+            </div>
+            <span className="text-xs font-semibold px-2.5 py-1 bg-slate-100 text-slate-600 rounded-full shrink-0">
+              {filteredStocks.length} / {stocks.length} SKU
+            </span>
+          </div>
         </div>
 
         {loadingStocks ? (
-          <div className="py-8 text-center text-slate-500 text-sm font-medium">
-            Đang tải dữ liệu kho {selectedWarehouse}...
+          <div className="py-12 flex flex-col items-center justify-center text-slate-500 gap-2">
+            <RefreshCw className="w-6 h-6 animate-spin text-blue-600" />
+            <span className="text-sm">Đang tải dữ liệu kho {selectedWarehouse}...</span>
           </div>
-        ) : stocks.length === 0 ? (
-          <div className="py-8 text-center text-slate-400 text-sm font-medium">
-            Kho {selectedWarehouse} chưa có tồn kho.
-          </div>
+        ) : filteredStocks.length === 0 ? (
+          <EmptyState
+            title="Không tìm thấy mặt hàng phù hợp"
+            description={
+              stockSearchQuery
+                ? `Không có SKU nào khớp với từ khóa "${stockSearchQuery}".`
+                : `Kho ${selectedWarehouse} hiện tại chưa có dữ liệu tồn kho.`
+            }
+          />
         ) : (
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto rounded-xl border border-slate-200">
             <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="border-b bg-slate-50 text-slate-600 text-xs font-bold uppercase tracking-wider">
                   <th className="p-3">Mã SKU</th>
                   <th className="p-3">Tên Sản Phẩm</th>
                   <th className="p-3">Kho Chi Nhánh</th>
-                  <th className="p-3">Vị Trí Kho</th>
+                  <th className="p-3">Vị Trí Ô Kệ</th>
                   <th className="p-3 text-center">Số Lượng Tồn</th>
-                  <th className="p-3">Trạng Thái</th>
+                  <th className="p-3">Tình Trạng</th>
                   <th className="p-3 text-right">Cập Nhật</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 text-xs">
-                {stocks.map((item, idx) => {
-                  let statusBadge = (
-                    <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-emerald-100 text-emerald-700">
-                      Sẵn hàng
-                    </span>
+                {filteredStocks.map((item, idx) => {
+                  let statusComp = (
+                    <StatusBadge variant="success">Sẵn hàng</StatusBadge>
                   );
                   if (item.so_luong <= 5) {
-                    statusBadge = (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-rose-100 text-rose-700">
-                        Cực thấp
-                      </span>
+                    statusComp = (
+                      <StatusBadge variant="danger" pulse>Cực thấp</StatusBadge>
                     );
                   } else if (item.so_luong <= 15) {
-                    statusBadge = (
-                      <span className="px-2.5 py-1 rounded-full text-[11px] font-bold bg-amber-100 text-amber-700">
-                        Sắp hết
-                      </span>
+                    statusComp = (
+                      <StatusBadge variant="warning">Sắp hết</StatusBadge>
                     );
                   }
 
                   return (
-                    <tr key={idx} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-3 font-bold text-slate-800">{item.ma_sp}</td>
-                      <td className="p-3 font-semibold text-slate-700">{item.ten_sp}</td>
+                    <tr key={idx} className="hover:bg-slate-50/80 transition-colors">
+                      <td className="p-3 font-bold font-mono text-slate-800">{item.ma_sp}</td>
+                      <td className="p-3 font-semibold text-slate-800">{item.ten_sp}</td>
                       <td className="p-3 font-semibold text-blue-600">
                         {item.ten_kho || item.ma_kho}
                       </td>
-                      <td className="p-3 font-mono text-slate-500">Vị trí B-0{idx + 1}-02</td>
-                      <td className="p-3 font-extrabold text-center text-slate-800 text-sm">
-                        {item.so_luong}
+                      <td className="p-3 font-mono text-slate-500">
+                        {`Kệ B-0${(idx % 8) + 1}-02`}
                       </td>
-                      <td className="p-3">{statusBadge}</td>
-                      <td className="p-3 text-right text-slate-400">
+                      <td className="p-3 font-extrabold text-center text-slate-900 text-sm">
+                        {item.so_luong.toLocaleString()}
+                      </td>
+                      <td className="p-3">{statusComp}</td>
+                      <td className="p-3 text-right text-slate-400 font-mono">
                         {item.cap_nhat_luc
                           ? new Date(item.cap_nhat_luc).toLocaleTimeString('vi-VN')
-                          : '---'}
+                          : '—'}
                       </td>
                     </tr>
                   );

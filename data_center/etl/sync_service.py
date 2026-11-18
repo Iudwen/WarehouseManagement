@@ -1,3 +1,4 @@
+import os
 import psycopg
 import time
 from datetime import datetime
@@ -7,52 +8,52 @@ from datetime import datetime
 # CẤU HÌNH
 # ============================================================
 
-DB_USER = "admin"
-DB_PASSWORD = "admin123"
+DB_USER = os.environ.get("POSTGRES_USER", "admin")
+DB_PASSWORD = os.environ.get("POSTGRES_PASSWORD", "admin123")
 
-SYNC_INTERVAL = 300
+SYNC_INTERVAL = int(os.environ.get("SYNC_INTERVAL", "300"))
 
-WAIT_RETRY_INTERVAL = 10
+WAIT_RETRY_INTERVAL = int(os.environ.get("WAIT_RETRY_INTERVAL", "10"))
 
-COMPENSATION_RETRY_INTERVAL = 10
+COMPENSATION_RETRY_INTERVAL = int(os.environ.get("COMPENSATION_RETRY_INTERVAL", "10"))
 
 
 # ============================================================
-# CÁC NODE POSTGRESQL
+# CÁC NODE POSTGRESQL (Đọc từ biến môi trường, mặc định cho 1 máy)
 # ============================================================
 
 NODES = {
     "HN": {
-        "host": "postgres_hn",
-        "port": 5432,
-        "database": "warehouse_hn",
+        "host": os.environ.get("POSTGRES_HOST_HN", "postgres_hn"),
+        "port": int(os.environ.get("POSTGRES_PORT_HN", "5432")),
+        "database": os.environ.get("POSTGRES_DB_HN", "warehouse_hn"),
         "node_name": "NODE_HN"
     },
 
     "DN": {
-        "host": "postgres_dn",
-        "port": 5432,
-        "database": "warehouse_dn",
+        "host": os.environ.get("POSTGRES_HOST_DN", "postgres_dn"),
+        "port": int(os.environ.get("POSTGRES_PORT_DN", "5432")),
+        "database": os.environ.get("POSTGRES_DB_DN", "warehouse_dn"),
         "node_name": "NODE_DN"
     },
 
     "HCM": {
-        "host": "postgres_hcm",
-        "port": 5432,
-        "database": "warehouse_hcm",
+        "host": os.environ.get("POSTGRES_HOST_HCM", "postgres_hcm"),
+        "port": int(os.environ.get("POSTGRES_PORT_HCM", "5432")),
+        "database": os.environ.get("POSTGRES_DB_HCM", "warehouse_hcm"),
         "node_name": "NODE_HCM"
     }
 }
 
 
 # ============================================================
-# CENTRAL DATABASE
+# CENTRAL DATABASE (Đọc từ biến môi trường, mặc định cho 1 máy)
 # ============================================================
 
 CENTRAL = {
-    "host": "postgres_central",
-    "port": 5432,
-    "database": "warehouse_central"
+    "host": os.environ.get("POSTGRES_HOST_CENTRAL", "postgres_central"),
+    "port": int(os.environ.get("POSTGRES_PORT_CENTRAL", "5432")),
+    "database": os.environ.get("POSTGRES_DB_CENTRAL", "warehouse_central")
 }
 
 

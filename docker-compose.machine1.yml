@@ -1,0 +1,351 @@
+# ==========================================================
+# WAREHOUSE MANAGEMENT - MACHINE 1: MAIN SERVER
+# ==========================================================
+# Cụm dịch vụ hoạt động trên Máy 1 (Main Server):
+# - postgres_central : Database Trung tâm (Port 5436)
+# - postgres_hn      : Database Kho Hà Nội (Port 5433)
+# - mongodb          : Event Store & Logs (Port 27018)
+# - kafka            : Message Broker (Port 9092, 9094)
+# - sync_service     : Data Center ETL & Đồng bộ Data Lake
+# - outbox_worker    : Relay CDC Outbox (HN local, DN/HCM qua LAN)
+# - nginx            : API Gateway & Web UI (Port 80)
+#
+# LƯU Ý QUAN TRỌNG:
+# - Backend API chạy trực tiếp trên Windows host (Port 5000: cd backend && npm run dev)
+# - Nginx kết nối Backend host qua host.docker.internal:5000
+# - Database DN và HCM được chuyển sang Máy 2 (LAN)
+#
+# Khởi động: docker compose -f docker-compose.machine1.yml up -d
+# ==========================================================
+
+services:
+
+  # ==========================================================
+  # NODE HN (KHO HÀ NỘI)
+  # ==========================================================
+  postgres_hn:
+    image: postgres:18
+    container_name: warehouse_postgres_hn
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB_HN:-warehouse_hn}
+
+    command:
+      - postgres
+      - -c
+      - wal_level=logical
+      - -c
+      - max_wal_senders=10
+      - -c
+      - max_replication_slots=10
+
+    ports:
+      - "${POSTGRES_PORT_HN:-5433}:5432"
+
+    volumes:
+      - postgres_hn_data:/var/lib/postgresql
+      - ./nodes/node_hn/01_create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql:ro
+      - ./nodes/node_hn/02_create_global_tables.sql:/docker-entrypoint-initdb.d/02_create_global_tables.sql:ro
+      - ./nodes/node_hn/03_create_hn_fragments.sql:/docker-entrypoint-initdb.d/03_create_hn_fragments.sql:ro
+      - ./nodes/node_hn/04_create_constraints.sql:/docker-entrypoint-initdb.d/04_create_constraints.sql:ro
+      - ./nodes/node_hn/05_insert_hn_data.sql:/docker-entrypoint-initdb.d/05_insert_hn_data.sql:ro
+      - ./nodes/node_hn/06_create_views.sql:/docker-entrypoint-initdb.d/06_create_views.sql:ro
+      - ./nodes/node_hn/07_create_indexes.sql:/docker-entrypoint-initdb.d/07_create_indexes.sql:ro
+      - ./nodes/node_hn/08_create_transaction_support.sql:/docker-entrypoint-initdb.d/08_create_transaction_support.sql:ro
+      - ./nodes/node_hn/10_create_slotting_bins.sql:/docker-entrypoint-initdb.d/10_create_slotting_bins.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB_HN:-warehouse_hn}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # CENTRAL DATABASE
+  # ==========================================================
+  postgres_central:
+    image: postgres:18
+    container_name: warehouse_postgres_central
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+      POSTGRES_DB: ${POSTGRES_DB_CENTRAL:-warehouse_central}
+
+    ports:
+      - "${POSTGRES_PORT_CENTRAL:-5436}:5432"
+
+    volumes:
+      - postgres_central_data:/var/lib/postgresql
+      - ./data_center/central_database/01_create_database.sql:/docker-entrypoint-initdb.d/01_create_database.sql:ro
+      - ./data_center/central_database/02_create_tables.sql:/docker-entrypoint-initdb.d/02_create_tables.sql:ro
+      - ./data_center/central_database/03_create_constraints.sql:/docker-entrypoint-initdb.d/03_create_constraints.sql:ro
+      - ./data_center/central_database/04_create_views.sql:/docker-entrypoint-initdb.d/04_create_views.sql:ro
+      - ./data_center/central_database/05_create_indexes.sql:/docker-entrypoint-initdb.d/05_create_indexes.sql:ro
+      - ./data_center/central_database/06_create_saga_monitoring.sql:/docker-entrypoint-initdb.d/06_create_saga_monitoring.sql:ro
+      - ./data_center/central_database/07_create_saga_views.sql:/docker-entrypoint-initdb.d/07_create_saga_views.sql:ro
+      - ./data_center/central_database/08_seed_data.sql:/docker-entrypoint-initdb.d/08_seed_data.sql:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${POSTGRES_USER:-admin} -d ${POSTGRES_DB_CENTRAL:-warehouse_central}"
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # MONGODB (EVENT STORE)
+  # ==========================================================
+  mongodb:
+    image: mongo:8
+    container_name: warehouse_mongodb
+    restart: unless-stopped
+
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-root}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-root123}
+      MONGO_INITDB_DATABASE: ${MONGO_DATABASE:-warehouse_events}
+
+    ports:
+      - "${MONGO_PORT:-27018}:27017"
+
+    volumes:
+      - mongodb_data:/data/db
+      - ./mongodb/01_init_database.js:/docker-entrypoint-initdb.d/01_init_database.js:ro
+      - ./mongodb/02_create_collections.js:/docker-entrypoint-initdb.d/02_create_collections.js:ro
+      - ./mongodb/03_create_indexes.js:/docker-entrypoint-initdb.d/03_create_indexes.js:ro
+      - ./mongodb/04_insert_sample_events.js:/docker-entrypoint-initdb.d/04_insert_sample_events.js:ro
+
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet --eval \"db.adminCommand('ping').ok\""
+        ]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # APACHE KAFKA (KRAFT SINGLE BROKER)
+  # ==========================================================
+  kafka:
+    image: apache/kafka:3.8.0
+    container_name: warehouse_kafka
+    restart: unless-stopped
+
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+
+    environment:
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092,CONTROLLER://0.0.0.0:9093,PLAINTEXT_HOST://0.0.0.0:9094
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_HOST://localhost:9094
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT,CONTROLLER:PLAINTEXT
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_DIRS: /var/lib/kafka/data
+      CLUSTER_ID: "MkU3OEVBNTcwNTJENDM2Qk"
+      KAFKA_JVM_PERFORMANCE_OPTS: "-Xms256m -Xmx512m -XX:+UseG1GC"
+
+    healthcheck:
+      test: ["CMD-SHELL", "/opt/kafka/bin/kafka-cluster.sh cluster-id --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+    volumes:
+      - kafka_data:/var/lib/kafka/data
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # SYNC SERVICE (ETL DATA CENTER)
+  # ==========================================================
+  sync_service:
+    build:
+      context: ./data_center/etl
+      dockerfile: Dockerfile
+    container_name: warehouse_sync_service
+    restart: unless-stopped
+
+    environment:
+      # Kết nối nội bộ MongoDB trong Docker network (không dùng MONGO_URI từ .env của Host vốn trỏ 127.0.0.1:27018)
+      MONGO_URI: mongodb://mongodb:27017/warehouse_events
+      MONGO_DATABASE: ${MONGO_DATABASE:-warehouse_events}
+      POSTGRES_HOST: postgres_central
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB_CENTRAL:-warehouse_central}
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+
+      # Kết nối Node HN (Local Container)
+      POSTGRES_HOST_HN: postgres_hn
+      POSTGRES_PORT_HN: 5432
+      POSTGRES_DB_HN: ${POSTGRES_DB_HN:-warehouse_hn}
+
+      # Kết nối Node DN & HCM (Remote trên Máy 2 qua LAN)
+      POSTGRES_HOST_DN: ${POSTGRES_HOST_DN}
+      POSTGRES_PORT_DN: ${POSTGRES_PORT_DN:-5434}
+      POSTGRES_DB_DN: ${POSTGRES_DB_DN:-warehouse_dn}
+
+      POSTGRES_HOST_HCM: ${POSTGRES_HOST_HCM}
+      POSTGRES_PORT_HCM: ${POSTGRES_PORT_HCM:-5435}
+      POSTGRES_DB_HCM: ${POSTGRES_DB_HCM:-warehouse_hcm}
+
+      POSTGRES_HOST_CENTRAL: postgres_central
+      POSTGRES_PORT_CENTRAL: 5432
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Chỉ phụ thuộc vào các dịch vụ có mặt trên Máy 1
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      postgres_hn:
+        condition: service_healthy
+      postgres_central:
+        condition: service_healthy
+
+    volumes:
+      - ./data_center/data_lake:/app/data_lake
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # OUTBOX RELAY WORKER
+  # ==========================================================
+  outbox_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: warehouse_outbox_worker
+    restart: unless-stopped
+
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-admin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-admin123}
+
+      # Node HN nội bộ
+      POSTGRES_HOST_HN: postgres_hn
+      POSTGRES_PORT_HN: 5432
+      POSTGRES_DB_HN: ${POSTGRES_DB_HN:-warehouse_hn}
+
+      # Node DN và HCM từ xa (trên Máy 2 qua LAN)
+      POSTGRES_HOST_DN: ${POSTGRES_HOST_DN}
+      POSTGRES_PORT_DN: ${POSTGRES_PORT_DN:-5434}
+      POSTGRES_DB_DN: ${POSTGRES_DB_DN:-warehouse_dn}
+
+      POSTGRES_HOST_HCM: ${POSTGRES_HOST_HCM}
+      POSTGRES_PORT_HCM: ${POSTGRES_PORT_HCM:-5435}
+      POSTGRES_DB_HCM: ${POSTGRES_DB_HCM:-warehouse_hcm}
+
+      POSTGRES_HOST_CENTRAL: postgres_central
+      POSTGRES_PORT_CENTRAL: 5432
+      POSTGRES_DB_CENTRAL: ${POSTGRES_DB_CENTRAL:-warehouse_central}
+
+      OUTBOX_ALL_NODES: "true"
+      OUTBOX_POLL_INTERVAL: "3000"
+      KAFKA_BROKERS: "kafka:9092"
+      # MongoDB phục vụ ghi nhận worker_heartbeats
+      MONGO_URI: mongodb://mongodb:27017/warehouse_events
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    # Chỉ phụ thuộc vào các dịch vụ có mặt trên Máy 1
+    depends_on:
+      postgres_hn:
+        condition: service_healthy
+      postgres_central:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+
+    networks:
+      - warehouse_network
+
+
+  # ==========================================================
+  # NGINX REVERSE PROXY / API GATEWAY & WEB APP
+  # ==========================================================
+  nginx:
+    image: nginx:alpine
+    container_name: warehouse_nginx
+    restart: unless-stopped
+
+    ports:
+      - "80:80"
+
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - ./frontend/dist:/usr/share/nginx/html:ro
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+    networks:
+      - warehouse_network
+
+
+# ==========================================================
+# VOLUMES
+# ==========================================================
+volumes:
+  postgres_hn_data:
+    name: warehouse_postgres_hn_data
+
+  postgres_central_data:
+    name: warehouse_postgres_central_data
+
+  mongodb_data:
+    name: warehouse_mongodb_data
+
+  kafka_data:
+    name: warehouse_kafka_data
+
+
+# ==========================================================
+# NETWORK
+# ==========================================================
+networks:
+  warehouse_network:
+    name: warehouse_network
+    driver: bridge
